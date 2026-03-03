@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dispatcher Dashboard — Vyoma Dispatch Tool</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    body { background: var(--bg); }
+    .dash-main { padding: 24px; flex: 1; }
+    .print-area { display: none; }
+    @media print {
+      .print-area { display: block; }
+      body > *:not(.print-area) { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="dash-header">
+  <div class="header-brand">
+    <div class="brand-name">Vyoma Linguistic Labs Foundation</div>
+    <div class="brand-sub">Dispatch Tool — Data Entry</div>
+  </div>
+  <button type="button" class="dark-toggle" onclick="toggleDarkMode()" title="Toggle dark mode" data-ocid="dash.dark.toggle">🌙</button>
+  <div class="header-user">
+    <div class="user-avatar" id="user-avatar">D</div>
+    <div>
+      <div class="user-name" id="user-name">—</div>
+      <div class="user-role" id="user-role-label">Dispatcher</div>
+    </div>
+    <button type="button" class="btn btn-ghost btn-sm" onclick="logout()" style="color:rgba(255,255,255,0.8);border-color:rgba(255,255,255,0.3)" data-ocid="dash.logout.button">Logout</button>
+  </div>
+</header>
+
+<!-- MAIN -->
+<main class="dash-main">
+  <!-- Page header -->
+  <div class="page-header">
+    <h2>My Dispatch Entries</h2>
+    <button type="button" class="btn btn-accent" onclick="openEntryModal()" data-ocid="dash.add.open_modal_button" style="font-size:0.95rem;padding:10px 20px">+ Add New Entry</button>
+  </div>
+
+  <!-- Stats -->
+  <div class="stat-grid mb-20" id="my-stats"></div>
+
+  <!-- Search + filter bar -->
+  <div class="filters-bar">
+    <input type="text" class="form-control search-input" id="search-input" placeholder="Search by name, order ID, tracking…" oninput="filterEntries()" data-ocid="dash.search.input" />
+    <select class="form-control" id="filter-status" onchange="filterEntries()" data-ocid="dash.filter_status.select">
+      <option value="">All Statuses</option>
+    </select>
+    <select class="form-control" id="filter-website" onchange="filterEntries()" data-ocid="dash.filter_website.select">
+      <option value="">All Websites</option>
+    </select>
+    <button type="button" class="btn btn-ghost btn-sm" onclick="clearFilters()" data-ocid="dash.filter_clear.button">Clear</button>
+  </div>
+
+  <!-- Table -->
+  <div class="table-wrap" id="entries-table-wrap">
+    <table class="data-table" id="entries-table">
+      <thead>
+        <tr>
+          <th>Sl</th>
+          <th>Customer Name</th>
+          <th>Order ID</th>
+          <th>Website</th>
+          <th>Dispatch Type</th>
+          <th>Tracking No</th>
+          <th>Status</th>
+          <th>Date</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="entries-tbody"></tbody>
+    </table>
+  </div>
+  <div id="entries-empty" class="empty-state hidden">
+    <div class="empty-icon">📭</div>
+    <h3>No entries yet</h3>
+    <p>Click "Add New Entry" to create your first dispatch record.</p>
+    <button type="button" class="btn btn-primary mt-16" onclick="openEntryModal()" data-ocid="dash.empty.add.button">+ Add New Entry</button>
+  </div>
+
+</main>
+
+<!-- ══════════════ MODAL: ADD/EDIT ENTRY ══════════════ -->
+<div class="modal-overlay" id="entry-modal-overlay" data-ocid="dash.entry.modal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 id="entry-modal-title">Add New Entry</h3>
+      <button type="button" class="modal-close" onclick="closeEntryModal()" data-ocid="dash.entry.modal.close_button">✕</button>
+    </div>
+    <div class="modal-body">
+      <form id="entry-form" novalidate>
+        <input type="hidden" id="entry-id" />
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="e-slno">Sl No <span class="required">*</span></label>
+            <input type="number" id="e-slno" class="form-control" min="1" data-ocid="dash.entry.slno.input" />
+            <div class="form-error" id="e-slno-err"></div>
+          </div>
+          <div class="form-group">
+            <label for="e-name">Customer Name <span class="required">*</span></label>
+            <input type="text" id="e-name" class="form-control" placeholder="Full name" data-ocid="dash.entry.name.input" />
+            <div class="form-error" id="e-name-err"></div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="e-address">Address</label>
+          <textarea id="e-address" class="form-control" rows="2" placeholder="Shipping address" data-ocid="dash.entry.address.textarea"></textarea>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="e-orderid">Order ID <span class="required">*</span></label>
+            <input type="text" id="e-orderid" class="form-control" placeholder="e.g. ORD-2025-001" data-ocid="dash.entry.orderid.input" />
+            <div class="form-error" id="e-orderid-err"></div>
+          </div>
+          <div class="form-group">
+            <label for="e-email">Customer Email</label>
+            <input type="email" id="e-email" class="form-control" placeholder="customer@email.com" data-ocid="dash.entry.email.input" />
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="e-website">Website <span class="required">*</span></label>
+            <select id="e-website" class="form-control" data-ocid="dash.entry.website.select">
+              <option value="">Select website</option>
+            </select>
+            <div class="form-error" id="e-website-err"></div>
+          </div>
+          <div class="form-group">
+            <label for="e-dtype">Dispatch Type <span class="required">*</span></label>
+            <select id="e-dtype" class="form-control" data-ocid="dash.entry.dtype.select">
+              <option value="">Select type</option>
+            </select>
+            <div class="form-error" id="e-dtype-err"></div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="e-tracking">Tracking Number</label>
+            <input type="text" id="e-tracking" class="form-control" placeholder="e.g. IN123456789" data-ocid="dash.entry.tracking.input" />
+          </div>
+          <div class="form-group">
+            <!-- spacer -->
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="e-notes">Notes (optional)</label>
+          <textarea id="e-notes" class="form-control" rows="2" placeholder="Any additional notes…" data-ocid="dash.entry.notes.textarea"></textarea>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-ghost" onclick="closeEntryModal()" data-ocid="dash.entry.modal.cancel_button">Cancel</button>
+      <button type="button" class="btn btn-outline" onclick="saveEntry('Draft')" data-ocid="dash.entry.modal.draft_button">💾 Save Draft</button>
+      <button type="button" class="btn btn-primary" onclick="saveEntry('In Process')" data-ocid="dash.entry.modal.save_button">✅ Save Entry</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ MODAL: EMAIL ══════════════ -->
+<div class="modal-overlay" id="email-modal-overlay" data-ocid="dash.email.modal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3>📧 Send Email Notification</h3>
+      <button type="button" class="modal-close" onclick="closeEmailModal()" data-ocid="dash.email.modal.close_button">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label for="em-to">To (Customer Email)</label>
+        <input type="email" id="em-to" class="form-control" placeholder="customer@email.com" data-ocid="dash.email.to.input" />
+      </div>
+      <div class="form-group">
+        <label for="em-subject">Subject</label>
+        <input type="text" id="em-subject" class="form-control" data-ocid="dash.email.subject.input" />
+      </div>
+      <div class="form-group">
+        <label for="em-body">Email Body</label>
+        <textarea id="em-body" class="form-control" rows="13" style="font-family:monospace;font-size:0.85rem" data-ocid="dash.email.body.textarea"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-ghost" onclick="copyEmailBody()" data-ocid="dash.email.copy.button">📋 Copy</button>
+      <button type="button" class="btn btn-outline" onclick="openGmail()" data-ocid="dash.email.gmail.button">✉️ Open in Gmail</button>
+      <button type="button" class="btn btn-primary" onclick="markSent()" data-ocid="dash.email.sent.button">✅ Mark as Sent</button>
+      <button type="button" class="btn btn-ghost" onclick="closeEmailModal()" data-ocid="dash.email.modal.cancel_button">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ PRINT AREA ══════════════ -->
+<div class="print-area" id="print-area"></div>
+
+<div id="toast-container"></div>
+<script src="app.js"></script>
+<script>
+/* ── Init ─────────────────────────────────────────────────── */
+let SESSION = null;
+let currentEmailEntryId = null;
+let editingEntryId = null;
+
+(function init() {
+  SESSION = checkSession('user');
+  if (!SESSION) return;
+
+  document.getElementById('user-name').textContent = SESSION.name;
+  document.getElementById('user-avatar').textContent = SESSION.name.charAt(0).toUpperCase();
+  document.getElementById('user-role-label').textContent = SESSION.role.charAt(0).toUpperCase() + SESSION.role.slice(1);
+  updateDarkToggle();
+
+  // Populate selects
+  const websiteSel = document.getElementById('e-website');
+  WEBSITES.forEach(function(w) {
+    const opt = document.createElement('option'); opt.value = w; opt.textContent = w;
+    websiteSel.appendChild(opt);
+  });
+  const dtypeSel = document.getElementById('e-dtype');
+  DISPATCH_TYPES.forEach(function(t) {
+    const opt = document.createElement('option'); opt.value = t; opt.textContent = t;
+    dtypeSel.appendChild(opt);
+  });
+  const statusSel = document.getElementById('filter-status');
+  STATUSES.forEach(function(s) {
+    const opt = document.createElement('option'); opt.value = s; opt.textContent = s;
+    statusSel.appendChild(opt);
+  });
+  const websiteFilterSel = document.getElementById('filter-website');
+  WEBSITES.forEach(function(w) {
+    const opt = document.createElement('option'); opt.value = w; opt.textContent = w;
+    websiteFilterSel.appendChild(opt);
+  });
+
+  loadStats();
+  filterEntries();
+})();
+
+/* ── Stats ────────────────────────────────────────────────── */
+function loadStats() {
+  const myDispatches = getDispatches().filter(function(d) { return d.createdBy === SESSION.userId; });
+  const counts = { total: myDispatches.length, 'In Process': 0, 'Dispatched': 0, 'Delivered': 0, 'Completed': 0 };
+  myDispatches.forEach(function(d) { if (counts[d.status] !== undefined) counts[d.status]++; });
+
+  document.getElementById('my-stats').innerHTML = `
+    <div class="stat-card stat-total">
+      <div class="stat-icon">📦</div>
+      <div class="stat-info"><h3>${counts.total}</h3><p>My Total</p></div>
+    </div>
+    <div class="stat-card stat-process">
+      <div class="stat-icon">🔄</div>
+      <div class="stat-info"><h3>${counts['In Process']}</h3><p>In Process</p></div>
+    </div>
+    <div class="stat-card stat-dispatch">
+      <div class="stat-icon">🚚</div>
+      <div class="stat-info"><h3>${counts['Dispatched']}</h3><p>Dispatched</p></div>
+    </div>
+    <div class="stat-card stat-delivered">
+      <div class="stat-icon">✅</div>
+      <div class="stat-info"><h3>${counts['Delivered']}</h3><p>Delivered</p></div>
+    </div>
+    <div class="stat-card stat-complete">
+      <div class="stat-icon">🏆</div>
+      <div class="stat-info"><h3>${counts['Completed']}</h3><p>Completed</p></div>
+    </div>`;
+}
+
+/* ── Filter & Render Table ────────────────────────────────── */
+function filterEntries() {
+  let dispatches = getDispatches().filter(function(d) { return d.createdBy === SESSION.userId; });
+  const search  = (document.getElementById('search-input').value || '').toLowerCase();
+  const status  = document.getElementById('filter-status').value;
+  const website = document.getElementById('filter-website').value;
+
+  if (search) dispatches = dispatches.filter(function(d) {
+    return (d.customerName||'').toLowerCase().includes(search) ||
+           (d.orderId||'').toLowerCase().includes(search) ||
+           (d.trackingNo||'').toLowerCase().includes(search);
+  });
+  if (status)  dispatches = dispatches.filter(function(d) { return d.status === status; });
+  if (website) dispatches = dispatches.filter(function(d) { return d.website === website; });
+
+  dispatches.sort(function(a, b) { return new Date(b.createdAt) - new Date(a.createdAt); });
+  renderTable(dispatches);
+}
+
+function renderTable(dispatches) {
+  const tbody = document.getElementById('entries-tbody');
+  const empty = document.getElementById('entries-empty');
+  const wrap  = document.getElementById('entries-table-wrap');
+
+  if (dispatches.length === 0) {
+    tbody.innerHTML = '';
+    empty.classList.remove('hidden');
+    wrap.classList.add('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+  wrap.classList.remove('hidden');
+
+  tbody.innerHTML = dispatches.map(function(d, i) {
+    const isCompleted = d.status === 'Completed';
+    const nextStatuses = STATUS_FLOW[d.status] || [d.status];
+    const statusOpts = nextStatuses.map(function(s) {
+      return '<option value="' + s + '"' + (d.status === s ? ' selected' : '') + '>' + s + '</option>';
+    }).join('');
+
+    return `<tr id="row-${d.id}" data-ocid="dash.entries.row.${i+1}">
+      <td>${escHtml(String(d.slNo))}</td>
+      <td>
+        <strong>${escHtml(d.customerName)}</strong>
+        ${d.notes ? '<br><span class="small text-muted" title="' + escHtml(d.notes) + '">📝</span>' : ''}
+      </td>
+      <td><strong>${escHtml(d.orderId)}</strong></td>
+      <td>${escHtml(d.website)}</td>
+      <td>${escHtml(d.dispatchType)}</td>
+      <td>${escHtml(d.trackingNo||'—')}</td>
+      <td>
+        ${isCompleted
+          ? '<span class="badge badge-completed">Completed</span>'
+          : `<select class="status-select" onchange="changeStatus('${d.id}', this.value)" data-ocid="dash.entries.status_select.${i+1}">${statusOpts}</select>`
+        }
+      </td>
+      <td>
+        ${formatDate(d.createdAt)}
+        <br><span class="small text-muted">${timeAgo(d.updatedAt)}</span>
+      </td>
+      <td class="actions">
+        <div class="table-actions">
+          ${!isCompleted ? `<button type="button" class="btn btn-ghost btn-sm" onclick="editEntry('${d.id}')" data-ocid="dash.entries.edit_button.${i+1}">✏️</button>` : ''}
+          <button type="button" class="btn btn-ghost btn-sm" onclick="openEmailModal('${d.id}')" data-ocid="dash.entries.email_button.${i+1}">📧</button>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="printEntry('${d.id}')" data-ocid="dash.entries.print_button.${i+1}">🖨</button>
+          ${!isCompleted ? `<button type="button" class="btn btn-danger btn-sm" onclick="deleteEntry('${d.id}')" data-ocid="dash.entries.delete_button.${i+1}">🗑</button>` : ''}
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+/* ── Status Change ────────────────────────────────────────── */
+function changeStatus(id, newStatus) {
+  if (newStatus === 'Delivered') newStatus = 'Completed';
+  updateDispatchStatus(id, newStatus);
+  if (newStatus === 'Completed') showToast('Entry marked as Completed 🎉', 'success');
+  else showToast('Status updated to ' + newStatus, 'success');
+  loadStats();
+  filterEntries();
+}
+
+/* ── Add/Edit Entry Modal ─────────────────────────────────── */
+function openEntryModal(prefillId) {
+  editingEntryId = prefillId || null;
+  clearEntryForm();
+
+  if (prefillId) {
+    const entry = getDispatches().find(function(d) { return d.id === prefillId; });
+    if (entry) {
+      document.getElementById('entry-modal-title').textContent = 'Edit Entry';
+      document.getElementById('entry-id').value      = entry.id;
+      document.getElementById('e-slno').value        = entry.slNo;
+      document.getElementById('e-name').value        = entry.customerName;
+      document.getElementById('e-address').value     = entry.address;
+      document.getElementById('e-orderid').value     = entry.orderId;
+      document.getElementById('e-email').value       = entry.customerEmail;
+      document.getElementById('e-website').value     = entry.website;
+      document.getElementById('e-dtype').value       = entry.dispatchType;
+      document.getElementById('e-tracking').value    = entry.trackingNo;
+      document.getElementById('e-notes').value       = entry.notes;
+    }
+  } else {
+    document.getElementById('entry-modal-title').textContent = 'Add New Entry';
+    document.getElementById('e-slno').value = getNextSlNo(SESSION.userId);
+  }
+  document.getElementById('entry-modal-overlay').classList.add('open');
+}
+
+function closeEntryModal() {
+  document.getElementById('entry-modal-overlay').classList.remove('open');
+  clearEntryForm();
+  editingEntryId = null;
+}
+
+function clearEntryForm() {
+  ['entry-id','e-slno','e-name','e-address','e-orderid','e-email','e-tracking','e-notes'].forEach(function(id) {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('e-website').value = '';
+  document.getElementById('e-dtype').value   = '';
+  ['e-slno-err','e-name-err','e-orderid-err','e-website-err','e-dtype-err'].forEach(function(id) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = '';
+  });
+}
+
+function saveEntry(statusOverride) {
+  let valid = true;
+  const id        = document.getElementById('entry-id').value;
+  const slNo      = parseInt(document.getElementById('e-slno').value) || 0;
+  const name      = document.getElementById('e-name').value.trim();
+  const address   = document.getElementById('e-address').value.trim();
+  const orderId   = document.getElementById('e-orderid').value.trim();
+  const email     = document.getElementById('e-email').value.trim();
+  const website   = document.getElementById('e-website').value;
+  const dtype     = document.getElementById('e-dtype').value;
+  const tracking  = document.getElementById('e-tracking').value.trim();
+  const notes     = document.getElementById('e-notes').value.trim();
+
+  if (!slNo)    { document.getElementById('e-slno-err').textContent = 'Sl No required'; valid = false; }
+  if (!name)    { document.getElementById('e-name-err').textContent = 'Customer name required'; valid = false; }
+  if (!orderId) { document.getElementById('e-orderid-err').textContent = 'Order ID required'; valid = false; }
+  if (!website) { document.getElementById('e-website-err').textContent = 'Select a website'; valid = false; }
+  if (!dtype)   { document.getElementById('e-dtype-err').textContent = 'Select dispatch type'; valid = false; }
+  if (!valid) return;
+
+  const data = { slNo, customerName: name, address, orderId, website, dispatchType: dtype, trackingNo: tracking, customerEmail: email, notes, status: statusOverride };
+
+  if (id) {
+    // Keep original status if editing (don't override with the button's status)
+    const existing = getDispatches().find(function(d) { return d.id === id; });
+    data.status = existing ? existing.status : statusOverride;
+    updateDispatch(id, data);
+    showToast('Entry updated', 'success');
+  } else {
+    createDispatch(data, SESSION);
+    showToast(statusOverride === 'Draft' ? 'Draft saved' : 'Entry saved', 'success');
+  }
+
+  closeEntryModal();
+  loadStats();
+  filterEntries();
+}
+
+function editEntry(id) { openEntryModal(id); }
+
+/* ── Delete ────────────────────────────────────────────────── */
+function deleteEntry(id) {
+  confirmAction('Delete this dispatch entry? This cannot be undone.', function() {
+    deleteDispatch(id);
+    showToast('Entry deleted', 'success');
+    loadStats();
+    filterEntries();
+  }, 'Delete Entry');
+}
+
+/* ── Clear Filters ───────────────────────────────────────── */
+function clearFilters() {
+  document.getElementById('search-input').value = '';
+  document.getElementById('filter-status').value = '';
+  document.getElementById('filter-website').value = '';
+  filterEntries();
+}
+
+/* ── Email Modal ─────────────────────────────────────────── */
+function openEmailModal(id) {
+  const entry = getDispatches().find(function(d) { return d.id === id; });
+  if (!entry) return;
+  currentEmailEntryId = id;
+
+  document.getElementById('em-to').value      = entry.customerEmail || '';
+  document.getElementById('em-subject').value = buildEmailSubject(entry);
+  document.getElementById('em-body').value    = buildEmailBody(entry);
+  document.getElementById('email-modal-overlay').classList.add('open');
+}
+function closeEmailModal() {
+  document.getElementById('email-modal-overlay').classList.remove('open');
+  currentEmailEntryId = null;
+}
+function copyEmailBody() {
+  const subject = document.getElementById('em-subject').value;
+  const body    = document.getElementById('em-body').value;
+  const text    = 'Subject: ' + subject + '\n\n' + body;
+  navigator.clipboard.writeText(text).then(function() {
+    showToast('Copied to clipboard', 'success');
+  }).catch(function() { showToast('Copy failed — select and copy manually', 'warn'); });
+}
+function openGmail() {
+  const to      = encodeURIComponent(document.getElementById('em-to').value);
+  const subject = encodeURIComponent(document.getElementById('em-subject').value);
+  const body    = encodeURIComponent(document.getElementById('em-body').value);
+  window.open('https://mail.google.com/mail/?view=cm&to=' + to + '&su=' + subject + '&body=' + body, '_blank');
+}
+function markSent() {
+  if (currentEmailEntryId) {
+    updateDispatch(currentEmailEntryId, { emailSent: true, emailSentAt: new Date().toISOString() });
+    showToast('Marked as sent', 'success');
+  }
+  closeEmailModal();
+}
+
+/* ── Print Entry ─────────────────────────────────────────── */
+function printEntry(id) {
+  const entry = getDispatches().find(function(d) { return d.id === id; });
+  if (!entry) return;
+  const printArea = document.getElementById('print-area');
+  printArea.innerHTML = `
+    <div class="print-entry">
+      <h2 style="color:#1a237e;border-bottom:2px solid #f9a825;padding-bottom:8px;margin-bottom:16px">
+        Dispatch Entry — Vyoma Linguistic Labs Foundation
+      </h2>
+      <div class="print-row"><label>Sl No:</label><span>${entry.slNo}</span></div>
+      <div class="print-row"><label>Customer Name:</label><span>${escHtml(entry.customerName)}</span></div>
+      <div class="print-row"><label>Address:</label><span>${escHtml(entry.address||'—')}</span></div>
+      <div class="print-row"><label>Order ID:</label><span>${escHtml(entry.orderId)}</span></div>
+      <div class="print-row"><label>Customer Email:</label><span>${escHtml(entry.customerEmail||'—')}</span></div>
+      <div class="print-row"><label>Website:</label><span>${escHtml(entry.website)}</span></div>
+      <div class="print-row"><label>Dispatch Type:</label><span>${escHtml(entry.dispatchType)}</span></div>
+      <div class="print-row"><label>Tracking Number:</label><span>${escHtml(entry.trackingNo||'—')}</span></div>
+      <div class="print-row"><label>Status:</label><span>${escHtml(entry.status)}</span></div>
+      <div class="print-row"><label>Created By:</label><span>${escHtml(entry.createdByName)}</span></div>
+      <div class="print-row"><label>Created At:</label><span>${formatDateTime(entry.createdAt)}</span></div>
+      <div class="print-row"><label>Last Updated:</label><span>${formatDateTime(entry.updatedAt)}</span></div>
+      ${entry.notes ? '<div class="print-row"><label>Notes:</label><span>' + escHtml(entry.notes) + '</span></div>' : ''}
+    </div>`;
+  window.print();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Dashboard — Vyoma Dispatch Tool</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    .bulk-bar {
+      background: var(--primary);
+      color: #fff;
+      padding: 10px 18px;
+      border-radius: var(--radius-sm);
+      display: flex; align-items: center; gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    .bulk-bar span { font-size: 0.875rem; }
+    .report-stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; margin-bottom: 20px; }
+    .report-stat { background: var(--surface2); border-radius: var(--radius-sm); padding: 16px; text-align: center; }
+    .report-stat .val { font-size: 1.6rem; font-weight: 700; color: var(--primary); }
+    .report-stat .lbl { font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; }
+  </style>
+</head>
+<body>
+<div class="app-layout">
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">Vyoma Linguistic Labs Foundation</div>
+      <div class="sidebar-sub">Dispatch Tool — Admin</div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="section-title">Navigation</div>
+      <div class="nav-item active" data-tab="dashboard" data-ocid="admin.nav.dashboard" onclick="switchTab('dashboard')">
+        <span class="nav-icon">📊</span> Dashboard
+      </div>
+      <div class="nav-item" data-tab="team" data-ocid="admin.nav.team" onclick="switchTab('team')">
+        <span class="nav-icon">👥</span> Team Members
+        <span class="nav-badge" id="badge-team">0</span>
+      </div>
+      <div class="nav-item" data-tab="dispatches" data-ocid="admin.nav.dispatches" onclick="switchTab('dispatches')">
+        <span class="nav-icon">📦</span> All Dispatches
+        <span class="nav-badge" id="badge-dispatches">0</span>
+      </div>
+      <div class="nav-item" data-tab="reports" data-ocid="admin.nav.reports" onclick="switchTab('reports')">
+        <span class="nav-icon">📈</span> Reports &amp; Export
+      </div>
+    </nav>
+  </aside>
+  <div class="sidebar-overlay" onclick="closeSidebar()"></div>
+
+  <!-- MAIN -->
+  <div class="main-content">
+    <!-- HEADER -->
+    <header class="app-header">
+      <button type="button" class="sidebar-toggle" onclick="openSidebar()" title="Open menu">☰</button>
+      <div class="header-title" id="tab-title">Dashboard</div>
+      <button type="button" class="dark-toggle" onclick="toggleDarkMode()" title="Toggle dark mode" data-ocid="admin.dark.toggle">🌙</button>
+      <div class="header-user">
+        <div class="user-avatar" id="user-avatar">A</div>
+        <div>
+          <div class="user-name" id="user-name">—</div>
+          <div class="user-role">Super Admin</div>
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="logout()" data-ocid="admin.logout.button">Logout</button>
+      </div>
+    </header>
+
+    <!-- PAGE CONTENT -->
+    <main class="page-content">
+
+      <!-- ══════════════ TAB: DASHBOARD ══════════════ -->
+      <section id="tab-dashboard" class="fade-in">
+        <div class="page-header">
+          <h2>Analytics Overview</h2>
+          <div class="d-flex gap-8 align-center">
+            <input type="date" id="dash-date-from" class="form-control" style="max-width:150px" data-ocid="admin.dashboard.date_from.input" />
+            <span style="color:var(--text-muted);font-size:0.85rem">to</span>
+            <input type="date" id="dash-date-to" class="form-control" style="max-width:150px" data-ocid="admin.dashboard.date_to.input" />
+            <button type="button" class="btn btn-primary btn-sm" onclick="loadDashboard()" data-ocid="admin.dashboard.filter.button">Apply</button>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="clearDashFilter()" data-ocid="admin.dashboard.clear.button">Clear</button>
+          </div>
+        </div>
+
+        <div class="stat-grid mb-20" id="dash-stats"></div>
+
+        <div class="charts-grid">
+          <div class="chart-card">
+            <h3>Entries by Website</h3>
+            <div class="chart-wrap"><canvas id="chartWebsite"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <h3>Entries by Dispatch Type</h3>
+            <div class="chart-wrap"><canvas id="chartDispatch"></canvas></div>
+          </div>
+        </div>
+
+        <div class="card mt-20">
+          <h3 style="margin-bottom:14px;color:var(--text-muted);font-size:1rem">Recent Activity</h3>
+          <div id="activity-feed"></div>
+        </div>
+      </section>
+
+      <!-- ══════════════ TAB: TEAM MEMBERS ══════════════ -->
+      <section id="tab-team" class="fade-in hidden">
+        <div class="page-header">
+          <h2>Team Members</h2>
+          <button type="button" class="btn btn-accent" onclick="openTeamModal()" data-ocid="admin.team.add.open_modal_button">+ Add Team Member</button>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table" id="team-table">
+            <thead>
+              <tr>
+                <th>#</th><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Date Added</th><th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="team-tbody"></tbody>
+          </table>
+        </div>
+        <div id="team-empty" class="empty-state hidden">
+          <div class="empty-icon">👥</div>
+          <h3>No team members yet</h3>
+          <p>Add your first team member to get started.</p>
+        </div>
+      </section>
+
+      <!-- ══════════════ TAB: ALL DISPATCHES ══════════════ -->
+      <section id="tab-dispatches" class="fade-in hidden">
+        <div class="page-header">
+          <h2>All Dispatches</h2>
+          <div class="d-flex gap-8">
+            <button type="button" class="btn btn-ghost btn-sm" onclick="exportAllCSV()" data-ocid="admin.dispatches.csv.button">⬇ CSV</button>
+          </div>
+        </div>
+
+        <div class="filters-bar">
+          <input type="text" class="form-control search-input" id="d-search" placeholder="Search name, order ID, tracking…" oninput="filterDispatches()" data-ocid="admin.dispatches.search.input" />
+          <select class="form-control" id="d-filter-status" onchange="filterDispatches()" data-ocid="admin.dispatches.status.select">
+            <option value="">All Statuses</option>
+          </select>
+          <select class="form-control" id="d-filter-website" onchange="filterDispatches()" data-ocid="admin.dispatches.website.select">
+            <option value="">All Websites</option>
+          </select>
+          <select class="form-control" id="d-filter-dtype" onchange="filterDispatches()" data-ocid="admin.dispatches.dtype.select">
+            <option value="">All Dispatch Types</option>
+          </select>
+          <input type="date" id="d-date-from" class="form-control" onchange="filterDispatches()" data-ocid="admin.dispatches.date_from.input" />
+          <input type="date" id="d-date-to" class="form-control" onchange="filterDispatches()" data-ocid="admin.dispatches.date_to.input" />
+          <button type="button" class="btn btn-ghost btn-sm" onclick="clearDispatchFilters()" data-ocid="admin.dispatches.clear.button">Clear</button>
+        </div>
+
+        <!-- Bulk bar -->
+        <div id="bulk-bar" class="bulk-bar hidden">
+          <span id="bulk-count">0 selected</span>
+          <span>Update status to:</span>
+          <select class="form-control" id="bulk-status" style="max-width:160px" data-ocid="admin.dispatches.bulk_status.select">
+            <option value="">Select Status</option>
+          </select>
+          <button type="button" class="btn btn-accent btn-sm" onclick="applyBulkStatus()" data-ocid="admin.dispatches.bulk_apply.button">Apply</button>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="clearBulkSelection()" data-ocid="admin.dispatches.bulk_clear.button">Deselect All</button>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data-table" id="dispatches-table">
+            <thead>
+              <tr>
+                <th><input type="checkbox" id="select-all" class="row-check" data-ocid="admin.dispatches.select_all.checkbox" /></th>
+                <th>Sl</th><th>Name</th><th>Address</th><th>Order ID</th>
+                <th>Website</th><th>Dispatch Type</th><th>Tracking No</th>
+                <th>Status</th><th>Created By</th><th>Date</th><th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="dispatches-tbody"></tbody>
+          </table>
+        </div>
+        <div id="dispatches-empty" class="empty-state hidden">
+          <div class="empty-icon">📦</div>
+          <h3>No dispatch entries found</h3>
+          <p>Entries created by team members will appear here.</p>
+        </div>
+      </section>
+
+      <!-- ══════════════ TAB: REPORTS ══════════════ -->
+      <section id="tab-reports" class="fade-in hidden">
+        <div class="page-header">
+          <h2>Reports &amp; Export</h2>
+          <div class="d-flex gap-8">
+            <button type="button" class="btn btn-ghost btn-sm" onclick="exportReportCSV()" data-ocid="admin.reports.csv.button">⬇ Export CSV</button>
+            <button type="button" class="btn btn-primary btn-sm" onclick="exportExcel()" data-ocid="admin.reports.excel.button">⬇ Export Excel</button>
+          </div>
+        </div>
+
+        <div class="filters-bar">
+          <select class="form-control" id="r-filter-status" onchange="loadReports()" data-ocid="admin.reports.status.select">
+            <option value="">All Statuses</option>
+          </select>
+          <select class="form-control" id="r-filter-website" onchange="loadReports()" data-ocid="admin.reports.website.select">
+            <option value="">All Websites</option>
+          </select>
+          <select class="form-control" id="r-filter-dtype" onchange="loadReports()" data-ocid="admin.reports.dtype.select">
+            <option value="">All Dispatch Types</option>
+          </select>
+          <input type="date" id="r-date-from" class="form-control" onchange="loadReports()" data-ocid="admin.reports.date_from.input" />
+          <input type="date" id="r-date-to" class="form-control" onchange="loadReports()" data-ocid="admin.reports.date_to.input" />
+          <button type="button" class="btn btn-ghost btn-sm" onclick="clearReportFilters()" data-ocid="admin.reports.clear.button">Clear</button>
+        </div>
+
+        <div class="report-stat-grid" id="report-stats"></div>
+
+        <div class="card">
+          <h3 style="margin-bottom:14px;font-size:1rem;color:var(--text-muted)">Filtered Entries Preview</h3>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr><th>Sl</th><th>Name</th><th>Order ID</th><th>Website</th><th>Dispatch Type</th><th>Tracking</th><th>Status</th><th>Created By</th><th>Date</th></tr>
+              </thead>
+              <tbody id="report-tbody"></tbody>
+            </table>
+          </div>
+          <div id="report-empty" class="empty-state hidden" style="padding:30px">
+            <div class="empty-icon" style="font-size:2rem">📋</div>
+            <p>No entries match the current filters.</p>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<!-- ══════════ MODAL: ADD/EDIT TEAM MEMBER ══════════ -->
+<div class="modal-overlay" id="team-modal-overlay" data-ocid="admin.team.modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="team-modal-title">Add Team Member</h3>
+      <button type="button" class="modal-close" onclick="closeTeamModal()" data-ocid="admin.team.modal.close_button">✕</button>
+    </div>
+    <div class="modal-body">
+      <form id="team-form" novalidate>
+        <input type="hidden" id="tm-id" />
+        <div class="form-row">
+          <div class="form-group">
+            <label for="tm-name">Full Name <span class="required">*</span></label>
+            <input type="text" id="tm-name" class="form-control" placeholder="e.g. Ravi Kumar" data-ocid="admin.team.name.input" />
+            <div class="form-error" id="tm-name-err"></div>
+          </div>
+          <div class="form-group">
+            <label for="tm-email">Email <span class="required">*</span></label>
+            <input type="email" id="tm-email" class="form-control" placeholder="email@example.com" data-ocid="admin.team.email.input" />
+            <div class="form-error" id="tm-email-err"></div>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="tm-password">Password <span class="required">*</span></label>
+            <input type="text" id="tm-password" class="form-control" placeholder="Set a password" data-ocid="admin.team.password.input" />
+            <div class="form-error" id="tm-password-err"></div>
+          </div>
+          <div class="form-group">
+            <label for="tm-role">Role <span class="required">*</span></label>
+            <select id="tm-role" class="form-control" data-ocid="admin.team.role.select">
+              <option value="dispatcher">Dispatcher</option>
+              <option value="viewer">Viewer</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="tm-status">Status</label>
+          <select id="tm-status" class="form-control" data-ocid="admin.team.status.select">
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-ghost" onclick="closeTeamModal()" data-ocid="admin.team.modal.cancel_button">Cancel</button>
+      <button type="button" class="btn btn-primary" onclick="saveTeamMember()" data-ocid="admin.team.modal.save_button">Save Member</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ MODAL: EMAIL ══════════ -->
+<div class="modal-overlay" id="email-modal-overlay" data-ocid="admin.email.modal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3>📧 Send Email Notification</h3>
+      <button type="button" class="modal-close" onclick="closeEmailModal()" data-ocid="admin.email.modal.close_button">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label for="em-to">To (Customer Email)</label>
+        <input type="email" id="em-to" class="form-control" placeholder="customer@email.com" data-ocid="admin.email.to.input" />
+      </div>
+      <div class="form-group">
+        <label for="em-subject">Subject</label>
+        <input type="text" id="em-subject" class="form-control" data-ocid="admin.email.subject.input" />
+      </div>
+      <div class="form-group">
+        <label for="em-body">Email Body</label>
+        <textarea id="em-body" class="form-control" rows="12" style="font-family:monospace;font-size:0.85rem" data-ocid="admin.email.body.textarea"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-ghost" onclick="copyEmailToClipboard()" data-ocid="admin.email.copy.button">📋 Copy</button>
+      <button type="button" class="btn btn-outline" onclick="openInGmail()" data-ocid="admin.email.gmail.button">✉️ Open in Gmail</button>
+      <button type="button" class="btn btn-primary" onclick="markEmailSent()" data-ocid="admin.email.sent.button">✅ Mark as Sent</button>
+      <button type="button" class="btn btn-ghost" onclick="closeEmailModal()" data-ocid="admin.email.modal.cancel_button">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+<script src="app.js"></script>
+<script>
+/* ── Init ─────────────────────────────────────────────────── */
+let SESSION = null;
+let currentEmailEntryId = null;
+let chartWebsite = null;
+let chartDispatch = null;
+let filteredDispatches = [];
+let reportFiltered = [];
+
+(function init() {
+  SESSION = checkSession('admin');
+  if (!SESSION) return;
+
+  document.getElementById('user-name').textContent = SESSION.name;
+  document.getElementById('user-avatar').textContent = SESSION.name.charAt(0).toUpperCase();
+  updateDarkToggle();
+
+  // Populate filter selects
+  populateFilterSelects();
+
+  // Load initial tab
+  switchTab('dashboard');
+  updateBadges();
+})();
+
+/* ── Sidebar ──────────────────────────────────────────────── */
+function openSidebar()  { document.getElementById('sidebar').classList.add('open'); }
+function closeSidebar() { document.getElementById('sidebar').classList.remove('open'); }
+
+/* ── Tab Switching ────────────────────────────────────────── */
+const tabTitles = { dashboard: 'Analytics Dashboard', team: 'Team Members', dispatches: 'All Dispatches', reports: 'Reports & Export' };
+
+function switchTab(tabName) {
+  ['dashboard','team','dispatches','reports'].forEach(function(t) {
+    document.getElementById('tab-' + t).classList.toggle('hidden', t !== tabName);
+    document.querySelector('[data-tab="' + t + '"]').classList.toggle('active', t === tabName);
+  });
+  document.getElementById('tab-title').textContent = tabTitles[tabName] || tabName;
+
+  if (tabName === 'dashboard')  loadDashboard();
+  if (tabName === 'team')       loadTeam();
+  if (tabName === 'dispatches') loadDispatches();
+  if (tabName === 'reports')    loadReports();
+}
+
+/* ── Badges ───────────────────────────────────────────────── */
+function updateBadges() {
+  const users = getUsers().filter(function(u) { return u.role !== 'admin'; });
+  const dispatches = getDispatches();
+  document.getElementById('badge-team').textContent = users.length;
+  document.getElementById('badge-dispatches').textContent = dispatches.length;
+}
+
+/* ── Populate filter dropdowns ────────────────────────────── */
+function populateFilterSelects() {
+  // Status options
+  ['d-filter-status','r-filter-status'].forEach(function(id) {
+    const sel = document.getElementById(id);
+    STATUSES.forEach(function(s) {
+      const opt = document.createElement('option');
+      opt.value = s; opt.textContent = s;
+      sel.appendChild(opt);
+    });
+  });
+  // Website options
+  ['d-filter-website','r-filter-website'].forEach(function(id) {
+    const sel = document.getElementById(id);
+    WEBSITES.forEach(function(w) {
+      const opt = document.createElement('option');
+      opt.value = w; opt.textContent = w;
+      sel.appendChild(opt);
+    });
+  });
+  // Dispatch type
+  ['d-filter-dtype','r-filter-dtype'].forEach(function(id) {
+    const sel = document.getElementById(id);
+    DISPATCH_TYPES.forEach(function(d) {
+      const opt = document.createElement('option');
+      opt.value = d; opt.textContent = d;
+      sel.appendChild(opt);
+    });
+  });
+  // Bulk status
+  const bulkSel = document.getElementById('bulk-status');
+  STATUSES.forEach(function(s) {
+    const opt = document.createElement('option');
+    opt.value = s; opt.textContent = s;
+    bulkSel.appendChild(opt);
+  });
+}
+
+/* ══════════════════════════════════════════════════
+   TAB: DASHBOARD
+══════════════════════════════════════════════════ */
+function loadDashboard() {
+  let dispatches = getDispatches();
+  const from = document.getElementById('dash-date-from').value;
+  const to   = document.getElementById('dash-date-to').value;
+  if (from) dispatches = dispatches.filter(function(d) { return d.createdAt >= from; });
+  if (to)   dispatches = dispatches.filter(function(d) { return d.createdAt <= to + 'T23:59:59'; });
+
+  // Stat cards
+  const counts = { total: dispatches.length, 'In Process': 0, 'Dispatched': 0, 'Delivered': 0, 'Completed': 0 };
+  dispatches.forEach(function(d) { if (counts[d.status] !== undefined) counts[d.status]++; });
+
+  document.getElementById('dash-stats').innerHTML = `
+    <div class="stat-card stat-total">
+      <div class="stat-icon">📦</div>
+      <div class="stat-info"><h3>${counts.total}</h3><p>Total Entries</p></div>
+    </div>
+    <div class="stat-card stat-process">
+      <div class="stat-icon">🔄</div>
+      <div class="stat-info"><h3>${counts['In Process']}</h3><p>In Process</p></div>
+    </div>
+    <div class="stat-card stat-dispatch">
+      <div class="stat-icon">🚚</div>
+      <div class="stat-info"><h3>${counts['Dispatched']}</h3><p>Dispatched</p></div>
+    </div>
+    <div class="stat-card stat-delivered">
+      <div class="stat-icon">✅</div>
+      <div class="stat-info"><h3>${counts['Delivered']}</h3><p>Delivered</p></div>
+    </div>
+    <div class="stat-card stat-complete">
+      <div class="stat-icon">🏆</div>
+      <div class="stat-info"><h3>${counts['Completed']}</h3><p>Completed</p></div>
+    </div>`;
+
+  renderCharts(dispatches);
+  renderActivityFeed();
+}
+
+function clearDashFilter() {
+  document.getElementById('dash-date-from').value = '';
+  document.getElementById('dash-date-to').value = '';
+  loadDashboard();
+}
+
+function renderCharts(dispatches) {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const textColor = isDark ? '#c5cae9' : '#374151';
+  Chart.defaults.color = textColor;
+
+  // Website chart
+  const websiteCounts = {};
+  WEBSITES.forEach(function(w) { websiteCounts[w] = 0; });
+  dispatches.forEach(function(d) { if (websiteCounts[d.website] !== undefined) websiteCounts[d.website]++; });
+
+  if (chartWebsite) chartWebsite.destroy();
+  const ctxW = document.getElementById('chartWebsite').getContext('2d');
+  chartWebsite = new Chart(ctxW, {
+    type: 'pie',
+    data: {
+      labels: Object.keys(websiteCounts),
+      datasets: [{ data: Object.values(websiteCounts), backgroundColor: ['#1a237e','#3949ab','#5c6bc0','#f9a825','#ffd54f'], borderWidth: 2, borderColor: isDark ? '#1c1f2e' : '#fff' }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } } }
+  });
+
+  // Dispatch type chart
+  const dtCounts = {};
+  DISPATCH_TYPES.forEach(function(t) { dtCounts[t] = 0; });
+  dispatches.forEach(function(d) { if (dtCounts[d.dispatchType] !== undefined) dtCounts[d.dispatchType]++; });
+
+  if (chartDispatch) chartDispatch.destroy();
+  const ctxD = document.getElementById('chartDispatch').getContext('2d');
+  chartDispatch = new Chart(ctxD, {
+    type: 'bar',
+    data: {
+      labels: Object.keys(dtCounts),
+      datasets: [{ label: 'Entries', data: Object.values(dtCounts), backgroundColor: '#3949ab', borderRadius: 6 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: isDark ? '#2e3350' : '#e5e7eb' } }, x: { grid: { display: false } } }
+    }
+  });
+}
+
+function renderActivityFeed() {
+  const activity = getActivity().slice(0, 20);
+  const feed = document.getElementById('activity-feed');
+  if (activity.length === 0) {
+    feed.innerHTML = '<p class="text-muted small" style="text-align:center;padding:20px">No activity yet.</p>';
+    return;
+  }
+  feed.innerHTML = activity.map(function(a) {
+    return `<div class="activity-item">
+      <div class="activity-dot"></div>
+      <div>
+        <div class="activity-text"><strong>${escHtml(a.userName)}</strong> ${escHtml(a.details)}</div>
+        <div class="activity-time">${timeAgo(a.timestamp)}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ══════════════════════════════════════════════════
+   TAB: TEAM MEMBERS
+══════════════════════════════════════════════════ */
+function loadTeam() {
+  const users = getUsers().filter(function(u) { return u.role !== 'admin'; });
+  const tbody = document.getElementById('team-tbody');
+  const empty = document.getElementById('team-empty');
+
+  if (users.length === 0) {
+    tbody.innerHTML = '';
+    empty.classList.remove('hidden');
+    document.getElementById('team-table').classList.add('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+  document.getElementById('team-table').classList.remove('hidden');
+
+  tbody.innerHTML = users.map(function(u, i) {
+    return `<tr data-ocid="admin.team.row.${i+1}">
+      <td>${i+1}</td>
+      <td><strong>${escHtml(u.name)}</strong></td>
+      <td>${escHtml(u.email)}</td>
+      <td><span class="badge badge-${u.role}">${u.role}</span></td>
+      <td><span class="badge badge-${u.status}">${u.status}</span></td>
+      <td>${formatDate(u.dateAdded)}</td>
+      <td class="actions">
+        <div class="table-actions">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="editTeamMember('${u.id}')" data-ocid="admin.team.edit_button.${i+1}">✏️ Edit</button>
+          <button type="button" class="btn btn-danger btn-sm" onclick="removeTeamMember('${u.id}')" data-ocid="admin.team.delete_button.${i+1}">🗑 Remove</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+  updateBadges();
+}
+
+function openTeamModal(prefillId) {
+  document.getElementById('team-modal-title').textContent = prefillId ? 'Edit Team Member' : 'Add Team Member';
+  clearTeamForm();
+  if (prefillId) {
+    const u = getUsers().find(function(x) { return x.id === prefillId; });
+    if (u) {
+      document.getElementById('tm-id').value = u.id;
+      document.getElementById('tm-name').value = u.name;
+      document.getElementById('tm-email').value = u.email;
+      document.getElementById('tm-password').value = u.password;
+      document.getElementById('tm-role').value = u.role;
+      document.getElementById('tm-status').value = u.status;
+    }
+  }
+  document.getElementById('team-modal-overlay').classList.add('open');
+}
+function closeTeamModal() { document.getElementById('team-modal-overlay').classList.remove('open'); clearTeamForm(); }
+function editTeamMember(id) { openTeamModal(id); }
+
+function clearTeamForm() {
+  ['tm-id','tm-name','tm-email','tm-password'].forEach(function(id) { document.getElementById(id).value = ''; });
+  document.getElementById('tm-role').value = 'dispatcher';
+  document.getElementById('tm-status').value = 'active';
+  ['tm-name-err','tm-email-err','tm-password-err'].forEach(function(id) { document.getElementById(id).textContent = ''; });
+}
+
+function saveTeamMember() {
+  let valid = true;
+  const id       = document.getElementById('tm-id').value;
+  const name     = document.getElementById('tm-name').value.trim();
+  const email    = document.getElementById('tm-email').value.trim();
+  const password = document.getElementById('tm-password').value.trim();
+  const role     = document.getElementById('tm-role').value;
+  const status   = document.getElementById('tm-status').value;
+
+  if (!name)     { document.getElementById('tm-name-err').textContent = 'Name is required'; valid = false; }
+  if (!email)    { document.getElementById('tm-email-err').textContent = 'Email is required'; valid = false; }
+  if (!password) { document.getElementById('tm-password-err').textContent = 'Password is required'; valid = false; }
+  if (!valid) return;
+
+  const users = getUsers();
+  const emailExists = users.some(function(u) { return u.email.toLowerCase() === email.toLowerCase() && u.id !== id; });
+  if (emailExists) { document.getElementById('tm-email-err').textContent = 'Email already in use'; return; }
+
+  if (id) {
+    // Edit
+    const idx = users.findIndex(function(u) { return u.id === id; });
+    if (idx !== -1) {
+      users[idx] = Object.assign(users[idx], { name, email, password, role, status });
+      saveUsers(users);
+      logActivity('update', 'Updated team member: ' + name);
+      showToast('Team member updated', 'success');
+    }
+  } else {
+    // Add
+    users.push({ id: genId(), name, email, password, role, status, dateAdded: new Date().toISOString() });
+    saveUsers(users);
+    logActivity('create', 'Added team member: ' + name);
+    showToast('Team member added', 'success');
+  }
+
+  closeTeamModal();
+  loadTeam();
+}
+
+function removeTeamMember(id) {
+  const user = getUsers().find(function(u) { return u.id === id; });
+  if (!user) return;
+  confirmAction('Remove <strong>' + escHtml(user.name) + '</strong>? This cannot be undone.', function() {
+    let users = getUsers();
+    users = users.filter(function(u) { return u.id !== id; });
+    saveUsers(users);
+    logActivity('delete', 'Removed team member: ' + user.name);
+    showToast('Team member removed', 'success');
+    loadTeam();
+  }, 'Remove Team Member');
+}
+
+/* ══════════════════════════════════════════════════
+   TAB: ALL DISPATCHES
+══════════════════════════════════════════════════ */
+function loadDispatches() {
+  filterDispatches();
+}
+
+function getFilteredDispatches() {
+  let dispatches = getDispatches();
+  const search  = (document.getElementById('d-search').value || '').toLowerCase();
+  const status  = document.getElementById('d-filter-status').value;
+  const website = document.getElementById('d-filter-website').value;
+  const dtype   = document.getElementById('d-filter-dtype').value;
+  const from    = document.getElementById('d-date-from').value;
+  const to      = document.getElementById('d-date-to').value;
+
+  if (search) dispatches = dispatches.filter(function(d) {
+    return (d.customerName||'').toLowerCase().includes(search) ||
+           (d.orderId||'').toLowerCase().includes(search) ||
+           (d.trackingNo||'').toLowerCase().includes(search);
+  });
+  if (status)  dispatches = dispatches.filter(function(d) { return d.status === status; });
+  if (website) dispatches = dispatches.filter(function(d) { return d.website === website; });
+  if (dtype)   dispatches = dispatches.filter(function(d) { return d.dispatchType === dtype; });
+  if (from)    dispatches = dispatches.filter(function(d) { return d.createdAt >= from; });
+  if (to)      dispatches = dispatches.filter(function(d) { return d.createdAt <= to + 'T23:59:59'; });
+
+  return dispatches.sort(function(a, b) { return new Date(b.createdAt) - new Date(a.createdAt); });
+}
+
+function filterDispatches() {
+  filteredDispatches = getFilteredDispatches();
+  renderDispatchTable(filteredDispatches);
+}
+
+function renderDispatchTable(dispatches) {
+  const tbody = document.getElementById('dispatches-tbody');
+  const empty = document.getElementById('dispatches-empty');
+
+  if (dispatches.length === 0) {
+    tbody.innerHTML = '';
+    empty.classList.remove('hidden');
+    document.getElementById('dispatches-table').classList.add('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+  document.getElementById('dispatches-table').classList.remove('hidden');
+
+  tbody.innerHTML = dispatches.map(function(d, i) {
+    const statusOpts = STATUSES.map(function(s) {
+      return '<option value="' + s + '"' + (d.status === s ? ' selected' : '') + '>' + s + '</option>';
+    }).join('');
+
+    return `<tr id="drow-${d.id}" data-ocid="admin.dispatches.row.${i+1}">
+      <td><input type="checkbox" class="row-check dispatch-check" data-id="${d.id}" data-ocid="admin.dispatches.checkbox.${i+1}" onchange="updateBulkBar()" /></td>
+      <td>${escHtml(String(d.slNo))}</td>
+      <td><strong>${escHtml(d.customerName)}</strong><br><span class="small text-muted">${escHtml(d.customerEmail||'')}</span></td>
+      <td class="truncate" title="${escHtml(d.address)}">${escHtml(d.address||'—')}</td>
+      <td><strong>${escHtml(d.orderId)}</strong></td>
+      <td>${escHtml(d.website)}</td>
+      <td>${escHtml(d.dispatchType)}</td>
+      <td>${escHtml(d.trackingNo||'—')}</td>
+      <td>
+        <select class="status-select" onchange="adminStatusChange('${d.id}', this.value)" ${d.status==='Completed'?'disabled':''} data-ocid="admin.dispatches.status_select.${i+1}">
+          ${statusOpts}
+        </select>
+      </td>
+      <td>${escHtml(d.createdByName)}</td>
+      <td>${formatDate(d.createdAt)}<br><span class="small text-muted">${timeAgo(d.updatedAt)}</span></td>
+      <td class="actions">
+        <div class="table-actions">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="openEmailModalForEntry('${d.id}')" data-ocid="admin.dispatches.email_button.${i+1}">📧</button>
+          <button type="button" class="btn btn-danger btn-sm" onclick="adminDeleteDispatch('${d.id}')" data-ocid="admin.dispatches.delete_button.${i+1}">🗑</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  // Re-attach select-all
+  document.getElementById('select-all').checked = false;
+}
+
+function adminStatusChange(id, newStatus) {
+  if (newStatus === 'Delivered') newStatus = 'Completed';
+  updateDispatchStatus(id, newStatus);
+  showToast('Status updated to ' + newStatus, 'success');
+  filterDispatches();
+  updateBadges();
+}
+
+function adminDeleteDispatch(id) {
+  confirmAction('Delete this dispatch entry? This cannot be undone.', function() {
+    deleteDispatch(id);
+    showToast('Entry deleted', 'success');
+    filterDispatches();
+    updateBadges();
+  }, 'Delete Entry');
+}
+
+function clearDispatchFilters() {
+  document.getElementById('d-search').value = '';
+  document.getElementById('d-filter-status').value = '';
+  document.getElementById('d-filter-website').value = '';
+  document.getElementById('d-filter-dtype').value = '';
+  document.getElementById('d-date-from').value = '';
+  document.getElementById('d-date-to').value = '';
+  filterDispatches();
+}
+
+// Select-all
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('select-all').addEventListener('change', function() {
+    document.querySelectorAll('.dispatch-check').forEach(function(cb) { cb.checked = this.checked; }, this);
+    updateBulkBar();
+  });
+});
+
+function updateBulkBar() {
+  const checked = document.querySelectorAll('.dispatch-check:checked');
+  const bar = document.getElementById('bulk-bar');
+  if (checked.length > 0) {
+    bar.classList.remove('hidden');
+    document.getElementById('bulk-count').textContent = checked.length + ' selected';
+  } else {
+    bar.classList.add('hidden');
+  }
+}
+
+function clearBulkSelection() {
+  document.querySelectorAll('.dispatch-check').forEach(function(cb) { cb.checked = false; });
+  document.getElementById('select-all').checked = false;
+  document.getElementById('bulk-bar').classList.add('hidden');
+}
+
+function applyBulkStatus() {
+  const newStatus = document.getElementById('bulk-status').value;
+  if (!newStatus) { showToast('Please select a status', 'warn'); return; }
+  const checked = document.querySelectorAll('.dispatch-check:checked');
+  if (checked.length === 0) return;
+
+  const ids = Array.from(checked).map(function(cb) { return cb.dataset.id; });
+  confirmAction('Update ' + ids.length + ' entries to <strong>' + escHtml(newStatus) + '</strong>?', function() {
+    ids.forEach(function(id) { updateDispatchStatus(id, newStatus); });
+    showToast(ids.length + ' entries updated to ' + newStatus, 'success');
+    clearBulkSelection();
+    filterDispatches();
+    updateBadges();
+  }, 'Bulk Status Update');
+}
+
+function exportAllCSV() {
+  const rows = filteredDispatches.length > 0 ? filteredDispatches : getDispatches();
+  exportCSV(rows.map(dispatchToExportRow), 'vyoma_dispatches_' + new Date().toISOString().slice(0,10) + '.csv');
+}
+
+/* ══════════════════════════════════════════════════
+   TAB: REPORTS
+══════════════════════════════════════════════════ */
+function loadReports() {
+  let dispatches = getDispatches();
+  const status  = document.getElementById('r-filter-status').value;
+  const website = document.getElementById('r-filter-website').value;
+  const dtype   = document.getElementById('r-filter-dtype').value;
+  const from    = document.getElementById('r-date-from').value;
+  const to      = document.getElementById('r-date-to').value;
+
+  if (status)  dispatches = dispatches.filter(function(d) { return d.status === status; });
+  if (website) dispatches = dispatches.filter(function(d) { return d.website === website; });
+  if (dtype)   dispatches = dispatches.filter(function(d) { return d.dispatchType === dtype; });
+  if (from)    dispatches = dispatches.filter(function(d) { return d.createdAt >= from; });
+  if (to)      dispatches = dispatches.filter(function(d) { return d.createdAt <= to + 'T23:59:59'; });
+
+  reportFiltered = dispatches;
+
+  // Stats
+  const counts = { 'In Process': 0, 'Dispatched': 0, 'Delivered': 0, 'Completed': 0, 'Draft': 0 };
+  dispatches.forEach(function(d) { if (counts[d.status] !== undefined) counts[d.status]++; });
+
+  document.getElementById('report-stats').innerHTML = `
+    <div class="report-stat"><div class="val">${dispatches.length}</div><div class="lbl">Total Entries</div></div>
+    <div class="report-stat"><div class="val">${counts['Draft']}</div><div class="lbl">Draft</div></div>
+    <div class="report-stat"><div class="val">${counts['In Process']}</div><div class="lbl">In Process</div></div>
+    <div class="report-stat"><div class="val">${counts['Dispatched']}</div><div class="lbl">Dispatched</div></div>
+    <div class="report-stat"><div class="val">${counts['Delivered']}</div><div class="lbl">Delivered</div></div>
+    <div class="report-stat"><div class="val">${counts['Completed']}</div><div class="lbl">Completed</div></div>`;
+
+  const tbody = document.getElementById('report-tbody');
+  const empty = document.getElementById('report-empty');
+  if (dispatches.length === 0) {
+    tbody.innerHTML = '';
+    empty.classList.remove('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+  tbody.innerHTML = dispatches.map(function(d, i) {
+    return `<tr data-ocid="admin.reports.row.${i+1}">
+      <td>${escHtml(String(d.slNo))}</td>
+      <td>${escHtml(d.customerName)}</td>
+      <td>${escHtml(d.orderId)}</td>
+      <td>${escHtml(d.website)}</td>
+      <td>${escHtml(d.dispatchType)}</td>
+      <td>${escHtml(d.trackingNo||'—')}</td>
+      <td><span class="badge ${statusBadgeClass(d.status)}">${d.status}</span></td>
+      <td>${escHtml(d.createdByName)}</td>
+      <td>${formatDate(d.createdAt)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function clearReportFilters() {
+  ['r-filter-status','r-filter-website','r-filter-dtype'].forEach(function(id) { document.getElementById(id).value = ''; });
+  document.getElementById('r-date-from').value = '';
+  document.getElementById('r-date-to').value = '';
+  loadReports();
+}
+
+function exportReportCSV() {
+  const rows = reportFiltered.length > 0 ? reportFiltered : getDispatches();
+  exportCSV(rows.map(dispatchToExportRow), 'vyoma_report_' + new Date().toISOString().slice(0,10) + '.csv');
+}
+
+function exportExcel() {
+  const rows = reportFiltered.length > 0 ? reportFiltered : getDispatches();
+  if (!rows.length) { showToast('No data to export', 'warn'); return; }
+
+  if (typeof XLSX === 'undefined') { showToast('Excel library not loaded', 'error'); return; }
+
+  const exportRows = rows.map(dispatchToExportRow);
+  const ws = XLSX.utils.json_to_sheet(exportRows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Dispatches');
+
+  // Column widths
+  ws['!cols'] = Object.keys(exportRows[0]).map(function() { return { wch: 20 }; });
+
+  XLSX.writeFile(wb, 'vyoma_report_' + new Date().toISOString().slice(0,10) + '.xlsx');
+  showToast('Excel file exported', 'success');
+}
+
+/* ══════════════════════════════════════════════════
+   EMAIL MODAL
+══════════════════════════════════════════════════ */
+function openEmailModalForEntry(id) {
+  const entry = getDispatches().find(function(d) { return d.id === id; });
+  if (!entry) return;
+  currentEmailEntryId = id;
+
+  document.getElementById('em-to').value      = entry.customerEmail || '';
+  document.getElementById('em-subject').value = buildEmailSubject(entry);
+  document.getElementById('em-body').value    = buildEmailBody(entry);
+  document.getElementById('email-modal-overlay').classList.add('open');
+}
+function closeEmailModal() {
+  document.getElementById('email-modal-overlay').classList.remove('open');
+  currentEmailEntryId = null;
+}
+function copyEmailToClipboard() {
+  const body = document.getElementById('em-body').value;
+  const subject = document.getElementById('em-subject').value;
+  const text = 'Subject: ' + subject + '\n\n' + body;
+  navigator.clipboard.writeText(text).then(function() {
+    showToast('Copied to clipboard', 'success');
+  }).catch(function() { showToast('Copy failed — please select and copy manually', 'warn'); });
+}
+function openInGmail() {
+  const to      = encodeURIComponent(document.getElementById('em-to').value);
+  const subject = encodeURIComponent(document.getElementById('em-subject').value);
+  const body    = encodeURIComponent(document.getElementById('em-body').value);
+  window.open('https://mail.google.com/mail/?view=cm&to=' + to + '&su=' + subject + '&body=' + body, '_blank');
+}
+function markEmailSent() {
+  if (currentEmailEntryId) {
+    updateDispatch(currentEmailEntryId, { emailSent: true, emailSentAt: new Date().toISOString() });
+    showToast('Marked as sent', 'success');
+  }
+  closeEmailModal();
+}
+</script>
+</body>
+</html>

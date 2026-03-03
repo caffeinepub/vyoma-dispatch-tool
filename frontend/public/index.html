@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login — Vyoma Linguistic Labs Foundation</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .login-page { position: relative; overflow: hidden; }
+    .login-page::before {
+      content: '';
+      position: absolute;
+      width: 400px; height: 400px;
+      border-radius: 50%;
+      background: rgba(249,168,37,0.08);
+      top: -100px; right: -100px;
+      pointer-events: none;
+    }
+    .login-page::after {
+      content: '';
+      position: absolute;
+      width: 300px; height: 300px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.04);
+      bottom: -80px; left: -80px;
+      pointer-events: none;
+    }
+    .login-footer { text-align: center; font-size: 0.78rem; color: var(--text-light); margin-top: 24px; }
+    .login-footer a { color: var(--primary-light); }
+    .pw-wrap { position: relative; }
+    .pw-toggle {
+      position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; cursor: pointer; font-size: 1rem; color: var(--text-muted);
+    }
+    .timeout-banner {
+      background: #fff3e0;
+      border: 1px solid #f57c00;
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      font-size: 0.85rem;
+      color: #e65100;
+      margin-bottom: 18px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    [data-theme="dark"] .timeout-banner { background: #3e2000; border-color: #f57c00; color: #ffb74d; }
+    .divider { display: flex; align-items: center; gap: 10px; margin: 20px 0; color: var(--text-light); font-size: 0.78rem; }
+    .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+  </style>
+</head>
+<body>
+<div class="login-page" id="login-page">
+  <!-- Dark mode toggle top-right -->
+  <button type="button" class="dark-toggle" onclick="toggleDarkMode()" style="position:absolute;top:18px;right:20px;z-index:10" title="Toggle dark mode" data-ocid="login.toggle">🌙</button>
+
+  <div class="login-card" style="position:relative;z-index:1">
+    <div class="login-logo">
+      <div class="logo-icon">📦</div>
+      <div class="company-name">Vyoma Linguistic Labs Foundation</div>
+      <div class="company-subtitle">Dispatch Tool — Data Entry</div>
+    </div>
+
+    <div id="timeout-banner" class="timeout-banner hidden">
+      ⏰ Your session expired after 8 hours of inactivity. Please log in again.
+    </div>
+
+    <form id="login-form" novalidate>
+      <div class="form-group">
+        <label for="email">Email Address <span class="required">*</span></label>
+        <input
+          type="email"
+          id="email"
+          class="form-control"
+          placeholder="Enter your email"
+          autocomplete="username"
+          data-ocid="login.email.input"
+          required
+        />
+        <div class="form-error" id="email-error"></div>
+      </div>
+
+      <div class="form-group">
+        <label for="password">Password <span class="required">*</span></label>
+        <div class="pw-wrap">
+          <input
+            type="password"
+            id="password"
+            class="form-control"
+            placeholder="Enter your password"
+            autocomplete="current-password"
+            data-ocid="login.password.input"
+            required
+          />
+          <button type="button" class="pw-toggle" id="pw-toggle" title="Show/hide password">👁️</button>
+        </div>
+        <div class="form-error" id="password-error"></div>
+      </div>
+
+      <div class="form-error" id="login-error" style="font-size:0.875rem;margin-bottom:10px"></div>
+
+      <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;padding:11px" id="login-btn" data-ocid="login.submit_button">
+        Sign In
+      </button>
+    </form>
+
+    <div class="login-footer">
+      &copy; 2025 Vyoma Linguistic Labs Foundation. All rights reserved.
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+<script src="app.js"></script>
+<script>
+(function() {
+  // Check if already logged in
+  const session = getSession();
+  if (session) {
+    if (session.role === 'admin') { window.location.href = 'admin.html'; return; }
+    else { window.location.href = 'dashboard.html'; return; }
+  }
+
+  // Show timeout banner if redirected from timeout
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('timeout') === '1') {
+    document.getElementById('timeout-banner').classList.remove('hidden');
+  }
+
+  // Dark mode toggle
+  updateDarkToggle();
+
+  // Password toggle
+  const pwInput = document.getElementById('password');
+  const pwToggle = document.getElementById('pw-toggle');
+  pwToggle.addEventListener('click', function() {
+    if (pwInput.type === 'password') { pwInput.type = 'text'; pwToggle.textContent = '🙈'; }
+    else { pwInput.type = 'password'; pwToggle.textContent = '👁️'; }
+  });
+
+  // Form submit
+  const form = document.getElementById('login-form');
+  const loginBtn = document.getElementById('login-btn');
+
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    clearErrors();
+
+    const email    = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+
+    let valid = true;
+    if (!email) { showErr('email-error', 'Email is required'); valid = false; }
+    if (!password) { showErr('password-error', 'Password is required'); valid = false; }
+    if (!valid) return;
+
+    loginBtn.classList.add('btn-loading');
+    loginBtn.disabled = true;
+
+    // Simulate slight delay for UX
+    setTimeout(function() {
+      const result = login(email, password);
+      loginBtn.classList.remove('btn-loading');
+      loginBtn.disabled = false;
+
+      if (!result.ok) {
+        showErr('login-error', result.error);
+        document.getElementById('email').classList.add('error');
+        document.getElementById('password').classList.add('error');
+        return;
+      }
+
+      showToast('Welcome back, ' + result.session.name + '!', 'success');
+      setTimeout(function() {
+        if (result.session.role === 'admin') window.location.href = 'admin.html';
+        else window.location.href = 'dashboard.html';
+      }, 600);
+    }, 500);
+  });
+
+  function showErr(id, msg) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = msg;
+  }
+  function clearErrors() {
+    ['email-error','password-error','login-error'].forEach(function(id) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = '';
+    });
+    ['email','password'].forEach(function(id) {
+      const el = document.getElementById(id);
+      if (el) el.classList.remove('error');
+    });
+  }
+})();
+</script>
+</body>
+</html>
