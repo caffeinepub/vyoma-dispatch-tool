@@ -25,11 +25,17 @@ const ADMIN_SEED = {
 };
 
 const WEBSITES = [
-  'Digitalsanskritguru.com',
+  'digitalsanskritguru.com',
   'Direct Sales',
-  'Sales',
+  'Sponsored Sales',
+  'Bulk Sales',
+];
+
+const NAME_TYPES = [
   'Complimentary',
-  'Discount',
+  'Retail',
+  'Discounted',
+  'Free',
 ];
 
 const DISPATCH_TYPES = [
@@ -181,14 +187,18 @@ function createDispatch(data, session) {
     id: genId(),
     slNo: data.slNo || getNextSlNo(session.userId),
     customerName: data.customerName,
+    nameType: data.nameType || '',
     address: data.address || '',
     orderId: data.orderId,
     website: data.website,
     dispatchType: data.dispatchType,
     trackingNo: data.trackingNo || '',
     customerEmail: data.customerEmail || '',
+    products: data.products || [],
     notes: data.notes || '',
     status: data.status || 'In Process',
+    emailSent: false,
+    emailSentAt: null,
     createdBy: session.userId,
     createdByName: session.name,
     createdAt: new Date().toISOString(),
@@ -403,16 +413,20 @@ function exportCSV(rows, filename) {
 }
 
 function dispatchToExportRow(d) {
+  const productsSummary = (d.products || []).map(function(p) { return p.name + ' x' + p.qty; }).join('; ');
   return {
     'Sl No': d.slNo,
     'Customer Name': d.customerName,
+    'Name Type': d.nameType || '',
     'Address': d.address,
     'Order ID': d.orderId,
     'Website': d.website,
     'Dispatch Type': d.dispatchType,
     'Tracking No': d.trackingNo,
     'Customer Email': d.customerEmail,
+    'Products': productsSummary,
     'Status': d.status,
+    'Email Sent': d.emailSent ? 'Yes' : 'No',
     'Created By': d.createdByName,
     'Created At': formatDateTime(d.createdAt),
     'Updated At': formatDateTime(d.updatedAt),

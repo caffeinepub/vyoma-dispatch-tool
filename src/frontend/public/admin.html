@@ -45,6 +45,9 @@
         <span class="nav-icon">📦</span> All Dispatches
         <span class="nav-badge" id="badge-dispatches">0</span>
       </div>
+      <div class="nav-item" data-tab="analytics" data-ocid="admin.nav.analytics" onclick="switchTab('analytics')">
+        <span class="nav-icon">👤</span> User Analytics
+      </div>
       <div class="nav-item" data-tab="reports" data-ocid="admin.nav.reports" onclick="switchTab('reports')">
         <span class="nav-icon">📈</span> Reports &amp; Export
       </div>
@@ -97,6 +100,16 @@
             <div class="chart-wrap"><canvas id="chartDispatch"></canvas></div>
           </div>
         </div>
+        <div class="charts-grid mt-20">
+          <div class="chart-card">
+            <h3>Entries by Status</h3>
+            <div class="chart-wrap"><canvas id="chartStatus"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <h3>Top Dispatchers</h3>
+            <div class="chart-wrap"><canvas id="chartDispatchers"></canvas></div>
+          </div>
+        </div>
 
         <div class="card mt-20">
           <h3 style="margin-bottom:14px;color:var(--text-muted);font-size:1rem">Recent Activity</h3>
@@ -144,6 +157,9 @@
           <select class="form-control" id="d-filter-website" onchange="filterDispatches()" data-ocid="admin.dispatches.website.select">
             <option value="">All Websites</option>
           </select>
+          <select class="form-control" id="d-filter-nametype" onchange="filterDispatches()" data-ocid="admin.dispatches.nametype.select">
+            <option value="">All Name Types</option>
+          </select>
           <select class="form-control" id="d-filter-dtype" onchange="filterDispatches()" data-ocid="admin.dispatches.dtype.select">
             <option value="">All Dispatch Types</option>
           </select>
@@ -169,7 +185,7 @@
               <tr>
                 <th><input type="checkbox" id="select-all" class="row-check" data-ocid="admin.dispatches.select_all.checkbox" /></th>
                 <th>Sl</th><th>Name</th><th>Address</th><th>Order ID</th>
-                <th>Website</th><th>Dispatch Type</th><th>Tracking No</th>
+                <th>Website</th><th>Name Type</th><th>Dispatch Type</th><th>Tracking No</th>
                 <th>Status</th><th>Created By</th><th>Date</th><th>Actions</th>
               </tr>
             </thead>
@@ -180,6 +196,62 @@
           <div class="empty-icon">📦</div>
           <h3>No dispatch entries found</h3>
           <p>Entries created by team members will appear here.</p>
+        </div>
+      </section>
+
+      <!-- ══════════════ TAB: USER ANALYTICS ══════════════ -->
+      <section id="tab-analytics" class="fade-in hidden">
+        <div class="page-header">
+          <h2>User Analytics</h2>
+          <div class="d-flex gap-8 align-center">
+            <input type="date" id="ua-date-from" class="form-control" style="max-width:150px" onchange="loadUserAnalytics()" data-ocid="admin.analytics.date_from.input" />
+            <span style="color:var(--text-muted);font-size:0.85rem">to</span>
+            <input type="date" id="ua-date-to" class="form-control" style="max-width:150px" onchange="loadUserAnalytics()" data-ocid="admin.analytics.date_to.input" />
+            <button type="button" class="btn btn-ghost btn-sm" onclick="clearUAFilter()" data-ocid="admin.analytics.clear.button">Clear</button>
+          </div>
+        </div>
+
+        <!-- Per-user stat cards -->
+        <div id="ua-user-cards" class="report-stat-grid mb-20"></div>
+
+        <!-- Charts row -->
+        <div class="charts-grid mb-20">
+          <div class="chart-card">
+            <h3>Entries per User</h3>
+            <div class="chart-wrap"><canvas id="chartUserEntries"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <h3>Entries by Status</h3>
+            <div class="chart-wrap"><canvas id="chartUserStatus"></canvas></div>
+          </div>
+        </div>
+
+        <div class="charts-grid mb-20">
+          <div class="chart-card">
+            <h3>Entries by Name Type</h3>
+            <div class="chart-wrap"><canvas id="chartNameType"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <h3>Daily Entries (Last 30 Days)</h3>
+            <div class="chart-wrap"><canvas id="chartDaily"></canvas></div>
+          </div>
+        </div>
+
+        <!-- Per-user detail table -->
+        <div class="card">
+          <h3 style="margin-bottom:14px;font-size:1rem;color:var(--text-muted)">Per-User Breakdown</h3>
+          <div class="table-wrap">
+            <table class="data-table" id="ua-table">
+              <thead>
+                <tr><th>User</th><th>Total</th><th>Draft</th><th>In Process</th><th>Dispatched</th><th>Delivered</th><th>Completed</th><th>Email Sent</th><th>Last Active</th></tr>
+              </thead>
+              <tbody id="ua-tbody"></tbody>
+            </table>
+          </div>
+          <div id="ua-empty" class="empty-state hidden" style="padding:30px">
+            <div class="empty-icon" style="font-size:2rem">👤</div>
+            <p>No dispatch entries yet.</p>
+          </div>
         </div>
       </section>
 
@@ -321,6 +393,12 @@ let SESSION = null;
 let currentEmailEntryId = null;
 let chartWebsite = null;
 let chartDispatch = null;
+let chartStatus = null;
+let chartDispatchers = null;
+let chartUserEntries = null;
+let chartUserStatus = null;
+let chartNameType = null;
+let chartDaily = null;
 let filteredDispatches = [];
 let reportFiltered = [];
 
@@ -345,10 +423,10 @@ function openSidebar()  { document.getElementById('sidebar').classList.add('open
 function closeSidebar() { document.getElementById('sidebar').classList.remove('open'); }
 
 /* ── Tab Switching ────────────────────────────────────────── */
-const tabTitles = { dashboard: 'Analytics Dashboard', team: 'Team Members', dispatches: 'All Dispatches', reports: 'Reports & Export' };
+const tabTitles = { dashboard: 'Analytics Dashboard', team: 'Team Members', dispatches: 'All Dispatches', analytics: 'User Analytics', reports: 'Reports & Export' };
 
 function switchTab(tabName) {
-  ['dashboard','team','dispatches','reports'].forEach(function(t) {
+  ['dashboard','team','dispatches','analytics','reports'].forEach(function(t) {
     document.getElementById('tab-' + t).classList.toggle('hidden', t !== tabName);
     document.querySelector('[data-tab="' + t + '"]').classList.toggle('active', t === tabName);
   });
@@ -357,6 +435,7 @@ function switchTab(tabName) {
   if (tabName === 'dashboard')  loadDashboard();
   if (tabName === 'team')       loadTeam();
   if (tabName === 'dispatches') loadDispatches();
+  if (tabName === 'analytics')  loadUserAnalytics();
   if (tabName === 'reports')    loadReports();
 }
 
@@ -397,6 +476,15 @@ function populateFilterSelects() {
       sel.appendChild(opt);
     });
   });
+  // Name type
+  const ntSel = document.getElementById('d-filter-nametype');
+  if (ntSel) {
+    NAME_TYPES.forEach(function(t) {
+      const opt = document.createElement('option');
+      opt.value = t; opt.textContent = t;
+      ntSel.appendChild(opt);
+    });
+  }
   // Bulk status
   const bulkSel = document.getElementById('bulk-status');
   STATUSES.forEach(function(s) {
@@ -490,6 +578,43 @@ function renderCharts(dispatches) {
       responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false } },
       scales: { y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: isDark ? '#2e3350' : '#e5e7eb' } }, x: { grid: { display: false } } }
+    }
+  });
+
+  // Status chart
+  const statusCounts = {};
+  STATUSES.forEach(function(s) { statusCounts[s] = 0; });
+  dispatches.forEach(function(d) { if (statusCounts[d.status] !== undefined) statusCounts[d.status]++; });
+  if (chartStatus) chartStatus.destroy();
+  const ctxSt = document.getElementById('chartStatus').getContext('2d');
+  chartStatus = new Chart(ctxSt, {
+    type: 'doughnut',
+    data: {
+      labels: Object.keys(statusCounts),
+      datasets: [{ data: Object.values(statusCounts), backgroundColor: ['#78909c','#1565c0','#f9a825','#2e7d32','#388e3c'], borderWidth: 2, borderColor: isDark ? '#1c1f2e' : '#fff' }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } } }
+  });
+
+  // Top dispatchers chart
+  const dispatcherCounts = {};
+  dispatches.forEach(function(d) {
+    const n = d.createdByName || 'Unknown';
+    dispatcherCounts[n] = (dispatcherCounts[n] || 0) + 1;
+  });
+  const topNames = Object.keys(dispatcherCounts).sort(function(a,b){ return dispatcherCounts[b]-dispatcherCounts[a]; }).slice(0,8);
+  if (chartDispatchers) chartDispatchers.destroy();
+  const ctxDp = document.getElementById('chartDispatchers').getContext('2d');
+  chartDispatchers = new Chart(ctxDp, {
+    type: 'bar',
+    data: {
+      labels: topNames,
+      datasets: [{ label: 'Entries', data: topNames.map(function(n){ return dispatcherCounts[n]; }), backgroundColor: '#5c6bc0', borderRadius: 6 }]
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { x: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: isDark ? '#2e3350' : '#e5e7eb' } }, y: { grid: { display: false } } }
     }
   });
 }
@@ -635,23 +760,25 @@ function loadDispatches() {
 
 function getFilteredDispatches() {
   let dispatches = getDispatches();
-  const search  = (document.getElementById('d-search').value || '').toLowerCase();
-  const status  = document.getElementById('d-filter-status').value;
-  const website = document.getElementById('d-filter-website').value;
-  const dtype   = document.getElementById('d-filter-dtype').value;
-  const from    = document.getElementById('d-date-from').value;
-  const to      = document.getElementById('d-date-to').value;
+  const search   = (document.getElementById('d-search').value || '').toLowerCase();
+  const status   = document.getElementById('d-filter-status').value;
+  const website  = document.getElementById('d-filter-website').value;
+  const nametype = document.getElementById('d-filter-nametype') ? document.getElementById('d-filter-nametype').value : '';
+  const dtype    = document.getElementById('d-filter-dtype').value;
+  const from     = document.getElementById('d-date-from').value;
+  const to       = document.getElementById('d-date-to').value;
 
   if (search) dispatches = dispatches.filter(function(d) {
     return (d.customerName||'').toLowerCase().includes(search) ||
            (d.orderId||'').toLowerCase().includes(search) ||
            (d.trackingNo||'').toLowerCase().includes(search);
   });
-  if (status)  dispatches = dispatches.filter(function(d) { return d.status === status; });
-  if (website) dispatches = dispatches.filter(function(d) { return d.website === website; });
-  if (dtype)   dispatches = dispatches.filter(function(d) { return d.dispatchType === dtype; });
-  if (from)    dispatches = dispatches.filter(function(d) { return d.createdAt >= from; });
-  if (to)      dispatches = dispatches.filter(function(d) { return d.createdAt <= to + 'T23:59:59'; });
+  if (status)   dispatches = dispatches.filter(function(d) { return d.status === status; });
+  if (website)  dispatches = dispatches.filter(function(d) { return d.website === website; });
+  if (nametype) dispatches = dispatches.filter(function(d) { return d.nameType === nametype; });
+  if (dtype)    dispatches = dispatches.filter(function(d) { return d.dispatchType === dtype; });
+  if (from)     dispatches = dispatches.filter(function(d) { return d.createdAt >= from; });
+  if (to)       dispatches = dispatches.filter(function(d) { return d.createdAt <= to + 'T23:59:59'; });
 
   return dispatches.sort(function(a, b) { return new Date(b.createdAt) - new Date(a.createdAt); });
 }
@@ -686,6 +813,7 @@ function renderDispatchTable(dispatches) {
       <td class="truncate" title="${escHtml(d.address)}">${escHtml(d.address||'—')}</td>
       <td><strong>${escHtml(d.orderId)}</strong></td>
       <td>${escHtml(d.website)}</td>
+      <td>${escHtml(d.nameType||'—')}</td>
       <td>${escHtml(d.dispatchType)}</td>
       <td>${escHtml(d.trackingNo||'—')}</td>
       <td>
@@ -697,7 +825,7 @@ function renderDispatchTable(dispatches) {
       <td>${formatDate(d.createdAt)}<br><span class="small text-muted">${timeAgo(d.updatedAt)}</span></td>
       <td class="actions">
         <div class="table-actions">
-          <button type="button" class="btn btn-ghost btn-sm" onclick="openEmailModalForEntry('${d.id}')" data-ocid="admin.dispatches.email_button.${i+1}">📧</button>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="openEmailModalForEntry('${d.id}')" data-ocid="admin.dispatches.email_button.${i+1}" title="${d.emailSent ? 'Email sent' : 'Send email'}">📧${d.emailSent ? '✓' : ''}</button>
           <button type="button" class="btn btn-danger btn-sm" onclick="adminDeleteDispatch('${d.id}')" data-ocid="admin.dispatches.delete_button.${i+1}">🗑</button>
         </div>
       </td>
@@ -729,6 +857,7 @@ function clearDispatchFilters() {
   document.getElementById('d-search').value = '';
   document.getElementById('d-filter-status').value = '';
   document.getElementById('d-filter-website').value = '';
+  if (document.getElementById('d-filter-nametype')) document.getElementById('d-filter-nametype').value = '';
   document.getElementById('d-filter-dtype').value = '';
   document.getElementById('d-date-from').value = '';
   document.getElementById('d-date-to').value = '';
@@ -866,6 +995,160 @@ function exportExcel() {
 }
 
 /* ══════════════════════════════════════════════════
+   TAB: USER ANALYTICS
+══════════════════════════════════════════════════ */
+function loadUserAnalytics() {
+  let dispatches = getDispatches();
+  const from = document.getElementById('ua-date-from').value;
+  const to   = document.getElementById('ua-date-to').value;
+  if (from) dispatches = dispatches.filter(function(d) { return d.createdAt >= from; });
+  if (to)   dispatches = dispatches.filter(function(d) { return d.createdAt <= to + 'T23:59:59'; });
+
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  Chart.defaults.color = isDark ? '#c5cae9' : '#374151';
+
+  // Build per-user map
+  const userMap = {};
+  dispatches.forEach(function(d) {
+    const uid  = d.createdBy || 'unknown';
+    const name = d.createdByName || 'Unknown';
+    if (!userMap[uid]) {
+      userMap[uid] = { name, total: 0, Draft: 0, 'In Process': 0, Dispatched: 0, Delivered: 0, Completed: 0, emailSent: 0, lastActive: null };
+    }
+    userMap[uid].total++;
+    if (userMap[uid][d.status] !== undefined) userMap[uid][d.status]++;
+    if (d.emailSent) userMap[uid].emailSent++;
+    if (!userMap[uid].lastActive || d.updatedAt > userMap[uid].lastActive) userMap[uid].lastActive = d.updatedAt;
+  });
+
+  const users = Object.values(userMap).sort(function(a,b){ return b.total - a.total; });
+
+  // Stat cards
+  const cardColors = ['#1a237e','#3949ab','#5c6bc0','#7986cb','#9fa8da'];
+  document.getElementById('ua-user-cards').innerHTML = users.length === 0
+    ? '<p class="text-muted small">No data yet.</p>'
+    : users.map(function(u, i) {
+        return `<div class="report-stat" style="border-top:3px solid ${cardColors[i%cardColors.length]}">
+          <div class="val">${u.total}</div>
+          <div class="lbl">${escHtml(u.name)}</div>
+          <div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px">${u.Completed} completed · ${u.emailSent} emails sent</div>
+        </div>`;
+      }).join('');
+
+  // Per-user entries bar chart
+  if (chartUserEntries) chartUserEntries.destroy();
+  const ctxUE = document.getElementById('chartUserEntries').getContext('2d');
+  chartUserEntries = new Chart(ctxUE, {
+    type: 'bar',
+    data: {
+      labels: users.map(function(u){ return u.name; }),
+      datasets: [{ label: 'Total Entries', data: users.map(function(u){ return u.total; }), backgroundColor: '#3949ab', borderRadius: 6 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: isDark ? '#2e3350' : '#e5e7eb' } }, x: { grid: { display: false } } }
+    }
+  });
+
+  // Status stacked bar chart per user
+  if (chartUserStatus) chartUserStatus.destroy();
+  const ctxUS = document.getElementById('chartUserStatus').getContext('2d');
+  chartUserStatus = new Chart(ctxUS, {
+    type: 'bar',
+    data: {
+      labels: users.map(function(u){ return u.name; }),
+      datasets: [
+        { label: 'Draft',      data: users.map(function(u){ return u.Draft; }),         backgroundColor: '#78909c', borderRadius: 3 },
+        { label: 'In Process', data: users.map(function(u){ return u['In Process']; }), backgroundColor: '#1565c0', borderRadius: 3 },
+        { label: 'Dispatched', data: users.map(function(u){ return u.Dispatched; }),    backgroundColor: '#f9a825', borderRadius: 3 },
+        { label: 'Delivered',  data: users.map(function(u){ return u.Delivered; }),     backgroundColor: '#2e7d32', borderRadius: 3 },
+        { label: 'Completed',  data: users.map(function(u){ return u.Completed; }),     backgroundColor: '#388e3c', borderRadius: 3 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { font: { size: 10 } } } },
+      scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, beginAtZero: true, grid: { color: isDark ? '#2e3350' : '#e5e7eb' } } }
+    }
+  });
+
+  // Name type chart
+  const ntCounts = {};
+  NAME_TYPES.forEach(function(t) { ntCounts[t] = 0; });
+  dispatches.forEach(function(d) { if (d.nameType && ntCounts[d.nameType] !== undefined) ntCounts[d.nameType]++; });
+  if (chartNameType) chartNameType.destroy();
+  const ctxNT = document.getElementById('chartNameType').getContext('2d');
+  chartNameType = new Chart(ctxNT, {
+    type: 'pie',
+    data: {
+      labels: Object.keys(ntCounts),
+      datasets: [{ data: Object.values(ntCounts), backgroundColor: ['#1a237e','#f9a825','#5c6bc0','#388e3c'], borderWidth: 2, borderColor: isDark ? '#1c1f2e' : '#fff' }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } } }
+  });
+
+  // Daily entries chart (last 30 days)
+  const today = new Date();
+  const days = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(today); d.setDate(d.getDate() - i);
+    days.push(d.toISOString().slice(0, 10));
+  }
+  const dayCounts = {};
+  days.forEach(function(d){ dayCounts[d] = 0; });
+  dispatches.forEach(function(d) {
+    const day = (d.createdAt || '').slice(0, 10);
+    if (dayCounts[day] !== undefined) dayCounts[day]++;
+  });
+  if (chartDaily) chartDaily.destroy();
+  const ctxDL = document.getElementById('chartDaily').getContext('2d');
+  chartDaily = new Chart(ctxDL, {
+    type: 'line',
+    data: {
+      labels: days.map(function(d){ return d.slice(5); }),
+      datasets: [{ label: 'Entries', data: days.map(function(d){ return dayCounts[d]; }), borderColor: '#3949ab', backgroundColor: 'rgba(57,73,171,0.1)', fill: true, tension: 0.4, pointRadius: 3 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: isDark ? '#2e3350' : '#e5e7eb' } }, x: { grid: { display: false }, ticks: { maxTicksLimit: 10 } } }
+    }
+  });
+
+  // Per-user table
+  const tbody = document.getElementById('ua-tbody');
+  const empty = document.getElementById('ua-empty');
+  if (users.length === 0) {
+    tbody.innerHTML = '';
+    empty.classList.remove('hidden');
+    document.getElementById('ua-table').classList.add('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+  document.getElementById('ua-table').classList.remove('hidden');
+  tbody.innerHTML = users.map(function(u, i) {
+    return `<tr data-ocid="admin.analytics.row.${i+1}">
+      <td><strong>${escHtml(u.name)}</strong></td>
+      <td><strong>${u.total}</strong></td>
+      <td>${u.Draft}</td>
+      <td>${u['In Process']}</td>
+      <td>${u.Dispatched}</td>
+      <td>${u.Delivered}</td>
+      <td>${u.Completed}</td>
+      <td>${u.emailSent}</td>
+      <td>${u.lastActive ? timeAgo(u.lastActive) : '—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function clearUAFilter() {
+  document.getElementById('ua-date-from').value = '';
+  document.getElementById('ua-date-to').value = '';
+  loadUserAnalytics();
+}
+
+/* ══════════════════════════════════════════════════
    EMAIL MODAL
 ══════════════════════════════════════════════════ */
 function openEmailModalForEntry(id) {
@@ -899,9 +1182,10 @@ function openInGmail() {
 function markEmailSent() {
   if (currentEmailEntryId) {
     updateDispatch(currentEmailEntryId, { emailSent: true, emailSentAt: new Date().toISOString() });
-    showToast('Marked as sent', 'success');
+    showToast('Email marked as sent', 'success');
   }
   closeEmailModal();
+  filterDispatches();
 }
 </script>
 </body>

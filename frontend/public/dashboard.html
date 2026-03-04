@@ -13,6 +13,22 @@
       .print-area { display: block; }
       body > *:not(.print-area) { display: none; }
     }
+    .product-row {
+      display: flex; align-items: center; gap: 8px;
+    }
+    .product-row input[type="text"] {
+      flex: 1; min-width: 0;
+    }
+    .qty-wrap {
+      display: flex; align-items: center; gap: 4px; flex-shrink: 0;
+    }
+    .qty-wrap button {
+      width: 28px; height: 28px; padding: 0; line-height: 1;
+      font-size: 1rem; font-weight: 700; border-radius: 4px;
+    }
+    .qty-wrap input[type="number"] {
+      width: 52px; text-align: center; padding: 4px;
+    }
   </style>
 </head>
 <body>
@@ -66,6 +82,7 @@
           <th>Customer Name</th>
           <th>Order ID</th>
           <th>Website</th>
+          <th>Name Type</th>
           <th>Dispatch Type</th>
           <th>Tracking No</th>
           <th>Status</th>
@@ -135,22 +152,32 @@
             <div class="form-error" id="e-website-err"></div>
           </div>
           <div class="form-group">
+            <label for="e-nametype">Name Type</label>
+            <select id="e-nametype" class="form-control" data-ocid="dash.entry.nametype.select">
+              <option value="">Select name type</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
             <label for="e-dtype">Dispatch Type <span class="required">*</span></label>
             <select id="e-dtype" class="form-control" data-ocid="dash.entry.dtype.select">
               <option value="">Select type</option>
             </select>
             <div class="form-error" id="e-dtype-err"></div>
           </div>
-        </div>
-
-        <div class="form-row">
           <div class="form-group">
             <label for="e-tracking">Tracking Number</label>
             <input type="text" id="e-tracking" class="form-control" placeholder="e.g. IN123456789" data-ocid="dash.entry.tracking.input" />
           </div>
-          <div class="form-group">
-            <!-- spacer -->
-          </div>
+        </div>
+
+        <!-- Product Purchased -->
+        <div class="form-group">
+          <label>Product Purchased</label>
+          <div id="products-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px"></div>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="addProductRow()" data-ocid="dash.entry.product.button" style="align-self:flex-start">+ Add Product</button>
         </div>
 
         <div class="form-group">
@@ -222,6 +249,11 @@ let editingEntryId = null;
   WEBSITES.forEach(function(w) {
     const opt = document.createElement('option'); opt.value = w; opt.textContent = w;
     websiteSel.appendChild(opt);
+  });
+  const nameTypeSel = document.getElementById('e-nametype');
+  NAME_TYPES.forEach(function(t) {
+    const opt = document.createElement('option'); opt.value = t; opt.textContent = t;
+    nameTypeSel.appendChild(opt);
   });
   const dtypeSel = document.getElementById('e-dtype');
   DISPATCH_TYPES.forEach(function(t) {
@@ -311,15 +343,19 @@ function renderTable(dispatches) {
     const statusOpts = nextStatuses.map(function(s) {
       return '<option value="' + s + '"' + (d.status === s ? ' selected' : '') + '>' + s + '</option>';
     }).join('');
+    const emailSent = d.emailSent === true;
+    const completeDisabled = !emailSent ? 'disabled title="Send email first to enable Complete"' : '';
 
     return `<tr id="row-${d.id}" data-ocid="dash.entries.row.${i+1}">
       <td>${escHtml(String(d.slNo))}</td>
       <td>
         <strong>${escHtml(d.customerName)}</strong>
+        ${d.nameType ? '<br><span class="small text-muted">' + escHtml(d.nameType) + '</span>' : ''}
         ${d.notes ? '<br><span class="small text-muted" title="' + escHtml(d.notes) + '">📝</span>' : ''}
       </td>
       <td><strong>${escHtml(d.orderId)}</strong></td>
       <td>${escHtml(d.website)}</td>
+      <td>${escHtml(d.nameType||'—')}</td>
       <td>${escHtml(d.dispatchType)}</td>
       <td>${escHtml(d.trackingNo||'—')}</td>
       <td>
@@ -335,8 +371,9 @@ function renderTable(dispatches) {
       <td class="actions">
         <div class="table-actions">
           ${!isCompleted ? `<button type="button" class="btn btn-ghost btn-sm" onclick="editEntry('${d.id}')" data-ocid="dash.entries.edit_button.${i+1}">✏️</button>` : ''}
-          <button type="button" class="btn btn-ghost btn-sm" onclick="openEmailModal('${d.id}')" data-ocid="dash.entries.email_button.${i+1}">📧</button>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="openEmailModal('${d.id}')" data-ocid="dash.entries.email_button.${i+1}" title="${emailSent ? 'Email sent' : 'Send email'}">📧${emailSent ? '✓' : ''}</button>
           <button type="button" class="btn btn-ghost btn-sm" onclick="printEntry('${d.id}')" data-ocid="dash.entries.print_button.${i+1}">🖨</button>
+          ${!isCompleted ? `<button type="button" class="btn btn-primary btn-sm" onclick="completeEntry('${d.id}')" ${completeDisabled} data-ocid="dash.entries.complete_button.${i+1}" style="opacity:${emailSent?'1':'0.4'}">✅ Complete</button>` : ''}
           ${!isCompleted ? `<button type="button" class="btn btn-danger btn-sm" onclick="deleteEntry('${d.id}')" data-ocid="dash.entries.delete_button.${i+1}">🗑</button>` : ''}
         </div>
       </td>
@@ -370,9 +407,11 @@ function openEntryModal(prefillId) {
       document.getElementById('e-orderid').value     = entry.orderId;
       document.getElementById('e-email').value       = entry.customerEmail;
       document.getElementById('e-website').value     = entry.website;
+      document.getElementById('e-nametype').value   = entry.nameType || '';
       document.getElementById('e-dtype').value       = entry.dispatchType;
       document.getElementById('e-tracking').value    = entry.trackingNo;
       document.getElementById('e-notes').value       = entry.notes;
+      (entry.products || []).forEach(function(p) { addProductRow(p.name, p.qty); });
     }
   } else {
     document.getElementById('entry-modal-title').textContent = 'Add New Entry';
@@ -392,12 +431,46 @@ function clearEntryForm() {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
-  document.getElementById('e-website').value = '';
-  document.getElementById('e-dtype').value   = '';
+  document.getElementById('e-website').value  = '';
+  document.getElementById('e-dtype').value    = '';
+  document.getElementById('e-nametype').value = '';
+  document.getElementById('products-list').innerHTML = '';
   ['e-slno-err','e-name-err','e-orderid-err','e-website-err','e-dtype-err'].forEach(function(id) {
     const el = document.getElementById(id);
     if (el) el.textContent = '';
   });
+}
+
+/* ── Product Rows ─────────────────────────────────────────── */
+function addProductRow(name, qty) {
+  const list = document.getElementById('products-list');
+  const idx  = list.children.length + 1;
+  const row  = document.createElement('div');
+  row.className = 'product-row';
+  row.innerHTML = `
+    <input type="text" class="form-control product-name" placeholder="Product name" value="${escHtml(name||'')}" data-ocid="dash.entry.product_name.input.${idx}" />
+    <div class="qty-wrap">
+      <button type="button" class="btn btn-ghost btn-sm" onclick="changeQty(this,-1)" data-ocid="dash.entry.product_qty_minus.button.${idx}">−</button>
+      <input type="number" class="form-control product-qty" value="${qty||1}" min="1" data-ocid="dash.entry.product_qty.input.${idx}" />
+      <button type="button" class="btn btn-ghost btn-sm" onclick="changeQty(this,1)" data-ocid="dash.entry.product_qty_plus.button.${idx}">+</button>
+    </div>
+    <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.product-row').remove()" data-ocid="dash.entry.product_remove.button.${idx}">✕</button>`;
+  list.appendChild(row);
+}
+
+function changeQty(btn, delta) {
+  const input = btn.closest('.qty-wrap').querySelector('.product-qty');
+  const val = parseInt(input.value) || 1;
+  input.value = Math.max(1, val + delta);
+}
+
+function getProductRows() {
+  return Array.from(document.querySelectorAll('#products-list .product-row')).map(function(row) {
+    return {
+      name: row.querySelector('.product-name').value.trim(),
+      qty:  parseInt(row.querySelector('.product-qty').value) || 1,
+    };
+  }).filter(function(p) { return p.name; });
 }
 
 function saveEntry(statusOverride) {
@@ -409,9 +482,11 @@ function saveEntry(statusOverride) {
   const orderId   = document.getElementById('e-orderid').value.trim();
   const email     = document.getElementById('e-email').value.trim();
   const website   = document.getElementById('e-website').value;
+  const nameType  = document.getElementById('e-nametype').value;
   const dtype     = document.getElementById('e-dtype').value;
   const tracking  = document.getElementById('e-tracking').value.trim();
   const notes     = document.getElementById('e-notes').value.trim();
+  const products  = getProductRows();
 
   if (!slNo)    { document.getElementById('e-slno-err').textContent = 'Sl No required'; valid = false; }
   if (!name)    { document.getElementById('e-name-err').textContent = 'Customer name required'; valid = false; }
@@ -420,7 +495,7 @@ function saveEntry(statusOverride) {
   if (!dtype)   { document.getElementById('e-dtype-err').textContent = 'Select dispatch type'; valid = false; }
   if (!valid) return;
 
-  const data = { slNo, customerName: name, address, orderId, website, dispatchType: dtype, trackingNo: tracking, customerEmail: email, notes, status: statusOverride };
+  const data = { slNo, customerName: name, nameType, address, orderId, website, dispatchType: dtype, trackingNo: tracking, customerEmail: email, products, notes, status: statusOverride };
 
   if (id) {
     // Keep original status if editing (don't override with the button's status)
@@ -448,6 +523,22 @@ function deleteEntry(id) {
     loadStats();
     filterEntries();
   }, 'Delete Entry');
+}
+
+/* ── Complete ─────────────────────────────────────────────── */
+function completeEntry(id) {
+  const entry = getDispatches().find(function(d) { return d.id === id; });
+  if (!entry) return;
+  if (!entry.emailSent) {
+    showToast('Please send the email first before completing this entry.', 'warn');
+    return;
+  }
+  confirmAction('Mark this entry as Completed? This cannot be undone.', function() {
+    updateDispatchStatus(id, 'Completed');
+    showToast('Entry marked as Completed', 'success');
+    loadStats();
+    filterEntries();
+  }, 'Complete Entry');
 }
 
 /* ── Clear Filters ───────────────────────────────────────── */
@@ -490,9 +581,10 @@ function openGmail() {
 function markSent() {
   if (currentEmailEntryId) {
     updateDispatch(currentEmailEntryId, { emailSent: true, emailSentAt: new Date().toISOString() });
-    showToast('Marked as sent', 'success');
+    showToast('Email marked as sent — Complete button is now enabled.', 'success');
   }
   closeEmailModal();
+  filterEntries();
 }
 
 /* ── Print Entry ─────────────────────────────────────────── */
@@ -500,6 +592,7 @@ function printEntry(id) {
   const entry = getDispatches().find(function(d) { return d.id === id; });
   if (!entry) return;
   const printArea = document.getElementById('print-area');
+  const productLines = (entry.products||[]).map(function(p){ return escHtml(p.name) + ' × ' + p.qty; }).join(', ') || '—';
   printArea.innerHTML = `
     <div class="print-entry">
       <h2 style="color:#1a237e;border-bottom:2px solid #f9a825;padding-bottom:8px;margin-bottom:16px">
@@ -507,12 +600,14 @@ function printEntry(id) {
       </h2>
       <div class="print-row"><label>Sl No:</label><span>${entry.slNo}</span></div>
       <div class="print-row"><label>Customer Name:</label><span>${escHtml(entry.customerName)}</span></div>
+      ${entry.nameType ? '<div class="print-row"><label>Name Type:</label><span>' + escHtml(entry.nameType) + '</span></div>' : ''}
       <div class="print-row"><label>Address:</label><span>${escHtml(entry.address||'—')}</span></div>
       <div class="print-row"><label>Order ID:</label><span>${escHtml(entry.orderId)}</span></div>
       <div class="print-row"><label>Customer Email:</label><span>${escHtml(entry.customerEmail||'—')}</span></div>
       <div class="print-row"><label>Website:</label><span>${escHtml(entry.website)}</span></div>
       <div class="print-row"><label>Dispatch Type:</label><span>${escHtml(entry.dispatchType)}</span></div>
       <div class="print-row"><label>Tracking Number:</label><span>${escHtml(entry.trackingNo||'—')}</span></div>
+      <div class="print-row"><label>Products Purchased:</label><span>${productLines}</span></div>
       <div class="print-row"><label>Status:</label><span>${escHtml(entry.status)}</span></div>
       <div class="print-row"><label>Created By:</label><span>${escHtml(entry.createdByName)}</span></div>
       <div class="print-row"><label>Created At:</label><span>${formatDateTime(entry.createdAt)}</span></div>
