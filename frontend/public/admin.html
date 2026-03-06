@@ -8,20 +8,23 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
-    .bulk-bar {
-      background: var(--primary);
-      color: #fff;
-      padding: 10px 18px;
-      border-radius: var(--radius-sm);
-      display: flex; align-items: center; gap: 12px;
-      flex-wrap: wrap;
-      margin-bottom: 12px;
-    }
-    .bulk-bar span { font-size: 0.875rem; }
-    .report-stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; margin-bottom: 20px; }
-    .report-stat { background: var(--surface2); border-radius: var(--radius-sm); padding: 16px; text-align: center; }
-    .report-stat .val { font-size: 1.6rem; font-weight: 700; color: var(--primary); }
-    .report-stat .lbl { font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; }
+    .bulk-bar { background:var(--primary);color:#fff;padding:10px 18px;border-radius:var(--radius-sm);display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px; }
+    .bulk-bar span { font-size:0.875rem; }
+    .report-stat-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;margin-bottom:20px; }
+    .report-stat { background:var(--surface2);border-radius:var(--radius-sm);padding:16px;text-align:center; }
+    .report-stat .val { font-size:1.6rem;font-weight:700;color:var(--primary); }
+    .report-stat .lbl { font-size:0.78rem;color:var(--text-muted);margin-top:2px; }
+    .settings-section { margin-bottom:32px; }
+    .settings-section h3 { font-size:1rem;font-weight:600;margin-bottom:12px;color:var(--text-muted);border-bottom:1px solid var(--border);padding-bottom:8px; }
+    .tag-list { display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px; }
+    .tag-item { display:inline-flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:4px 12px;font-size:0.82rem; }
+    .tag-remove { background:none;border:none;cursor:pointer;color:var(--danger);font-size:0.9rem;padding:0;line-height:1; }
+    .add-tag-row { display:flex;gap:8px;align-items:center;max-width:420px; }
+    .tracking-url-row { display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border); }
+    .tracking-url-row label { min-width:160px;font-size:0.88rem;font-weight:500; }
+    .tracking-url-row input { flex:1; }
+    .priority-badge { display:inline-block;padding:2px 8px;border-radius:20px;font-size:0.7rem;font-weight:600;color:#fff; }
+    .logo-img { max-height:48px;width:auto;margin-bottom:6px; }
   </style>
 </head>
 <body>
@@ -29,6 +32,7 @@
   <!-- SIDEBAR -->
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
+      <img src="assets/uploads/Vyoma_Logo_Blue_500x243-1--1.jpg" alt="Vyoma Logo" class="logo-img" onerror="this.style.display='none'" />
       <div class="sidebar-logo">Vyoma Linguistic Labs Foundation</div>
       <div class="sidebar-sub">Dispatch Tool — Admin</div>
     </div>
@@ -50,6 +54,9 @@
       </div>
       <div class="nav-item" data-tab="reports" data-ocid="admin.nav.reports" onclick="switchTab('reports')">
         <span class="nav-icon">📈</span> Reports &amp; Export
+      </div>
+      <div class="nav-item" data-tab="settings" data-ocid="admin.nav.settings" onclick="switchTab('settings')">
+        <span class="nav-icon">⚙️</span> Settings
       </div>
     </nav>
   </aside>
@@ -80,9 +87,9 @@
         <div class="page-header">
           <h2>Analytics Overview</h2>
           <div class="d-flex gap-8 align-center">
-            <input type="date" id="dash-date-from" class="form-control" style="max-width:150px" data-ocid="admin.dashboard.date_from.input" />
+            <input type="date" id="dash-date-from" class="form-control" style="max-width:150px" data-ocid="admin.dashboard.date_from.input" onchange="loadDashboard()" />
             <span style="color:var(--text-muted);font-size:0.85rem">to</span>
-            <input type="date" id="dash-date-to" class="form-control" style="max-width:150px" data-ocid="admin.dashboard.date_to.input" />
+            <input type="date" id="dash-date-to" class="form-control" style="max-width:150px" data-ocid="admin.dashboard.date_to.input" onchange="loadDashboard()" />
             <button type="button" class="btn btn-primary btn-sm" onclick="loadDashboard()" data-ocid="admin.dashboard.filter.button">Apply</button>
             <button type="button" class="btn btn-ghost btn-sm" onclick="clearDashFilter()" data-ocid="admin.dashboard.clear.button">Clear</button>
           </div>
@@ -91,24 +98,16 @@
         <div class="stat-grid mb-20" id="dash-stats"></div>
 
         <div class="charts-grid">
-          <div class="chart-card">
-            <h3>Entries by Website</h3>
-            <div class="chart-wrap"><canvas id="chartWebsite"></canvas></div>
-          </div>
-          <div class="chart-card">
-            <h3>Entries by Dispatch Type</h3>
-            <div class="chart-wrap"><canvas id="chartDispatch"></canvas></div>
-          </div>
+          <div class="chart-card"><h3>Entries by Website</h3><div class="chart-wrap"><canvas id="chartWebsite"></canvas></div></div>
+          <div class="chart-card"><h3>Entries by Dispatch Type</h3><div class="chart-wrap"><canvas id="chartDispatch"></canvas></div></div>
         </div>
         <div class="charts-grid mt-20">
-          <div class="chart-card">
-            <h3>Entries by Status</h3>
-            <div class="chart-wrap"><canvas id="chartStatus"></canvas></div>
-          </div>
-          <div class="chart-card">
-            <h3>Top Dispatchers</h3>
-            <div class="chart-wrap"><canvas id="chartDispatchers"></canvas></div>
-          </div>
+          <div class="chart-card"><h3>Entries by Status</h3><div class="chart-wrap"><canvas id="chartStatus"></canvas></div></div>
+          <div class="chart-card"><h3>Top Dispatchers</h3><div class="chart-wrap"><canvas id="chartDispatchers"></canvas></div></div>
+        </div>
+        <div class="charts-grid mt-20">
+          <div class="chart-card"><h3>Entries by Priority</h3><div class="chart-wrap"><canvas id="chartPriority"></canvas></div></div>
+          <div class="chart-card"><h3>Entries by Role (Dispatcher vs Assigner)</h3><div class="chart-wrap"><canvas id="chartRole"></canvas></div></div>
         </div>
 
         <div class="card mt-20">
@@ -126,9 +125,7 @@
         <div class="table-wrap">
           <table class="data-table" id="team-table">
             <thead>
-              <tr>
-                <th>#</th><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Date Added</th><th>Actions</th>
-              </tr>
+              <tr><th>#</th><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Date Added</th><th>Actions</th></tr>
             </thead>
             <tbody id="team-tbody"></tbody>
           </table>
@@ -151,30 +148,20 @@
 
         <div class="filters-bar">
           <input type="text" class="form-control search-input" id="d-search" placeholder="Search name, order ID, tracking…" oninput="filterDispatches()" data-ocid="admin.dispatches.search.input" />
-          <select class="form-control" id="d-filter-status" onchange="filterDispatches()" data-ocid="admin.dispatches.status.select">
-            <option value="">All Statuses</option>
-          </select>
-          <select class="form-control" id="d-filter-website" onchange="filterDispatches()" data-ocid="admin.dispatches.website.select">
-            <option value="">All Websites</option>
-          </select>
-          <select class="form-control" id="d-filter-nametype" onchange="filterDispatches()" data-ocid="admin.dispatches.nametype.select">
-            <option value="">All Name Types</option>
-          </select>
-          <select class="form-control" id="d-filter-dtype" onchange="filterDispatches()" data-ocid="admin.dispatches.dtype.select">
-            <option value="">All Dispatch Types</option>
-          </select>
+          <select class="form-control" id="d-filter-status" onchange="filterDispatches()" data-ocid="admin.dispatches.status.select"><option value="">All Statuses</option></select>
+          <select class="form-control" id="d-filter-website" onchange="filterDispatches()" data-ocid="admin.dispatches.website.select"><option value="">All Websites</option></select>
+          <select class="form-control" id="d-filter-nametype" onchange="filterDispatches()" data-ocid="admin.dispatches.nametype.select"><option value="">All Name Types</option></select>
+          <select class="form-control" id="d-filter-dtype" onchange="filterDispatches()" data-ocid="admin.dispatches.dtype.select"><option value="">All Dispatch Types</option></select>
+          <select class="form-control" id="d-filter-priority" onchange="filterDispatches()" data-ocid="admin.dispatches.priority.select"><option value="">All Priorities</option></select>
           <input type="date" id="d-date-from" class="form-control" onchange="filterDispatches()" data-ocid="admin.dispatches.date_from.input" />
           <input type="date" id="d-date-to" class="form-control" onchange="filterDispatches()" data-ocid="admin.dispatches.date_to.input" />
           <button type="button" class="btn btn-ghost btn-sm" onclick="clearDispatchFilters()" data-ocid="admin.dispatches.clear.button">Clear</button>
         </div>
 
-        <!-- Bulk bar -->
         <div id="bulk-bar" class="bulk-bar hidden">
           <span id="bulk-count">0 selected</span>
           <span>Update status to:</span>
-          <select class="form-control" id="bulk-status" style="max-width:160px" data-ocid="admin.dispatches.bulk_status.select">
-            <option value="">Select Status</option>
-          </select>
+          <select class="form-control" id="bulk-status" style="max-width:160px" data-ocid="admin.dispatches.bulk_status.select"><option value="">Select Status</option></select>
           <button type="button" class="btn btn-accent btn-sm" onclick="applyBulkStatus()" data-ocid="admin.dispatches.bulk_apply.button">Apply</button>
           <button type="button" class="btn btn-ghost btn-sm" onclick="clearBulkSelection()" data-ocid="admin.dispatches.bulk_clear.button">Deselect All</button>
         </div>
@@ -184,9 +171,9 @@
             <thead>
               <tr>
                 <th><input type="checkbox" id="select-all" class="row-check" data-ocid="admin.dispatches.select_all.checkbox" /></th>
-                <th>Sl</th><th>Name</th><th>Address</th><th>Order ID</th>
-                <th>Website</th><th>Name Type</th><th>Dispatch Type</th><th>Tracking No</th>
-                <th>Status</th><th>Created By</th><th>Date</th><th>Actions</th>
+                <th>Sl</th><th>Name</th><th>Order ID</th><th>Website</th>
+                <th>Dispatch Type</th><th>Tracking No</th><th>Priority</th>
+                <th>Assigned To</th><th>Status</th><th>Created By</th><th>Date</th><th>Actions</th>
               </tr>
             </thead>
             <tbody id="dispatches-tbody"></tbody>
@@ -210,40 +197,21 @@
             <button type="button" class="btn btn-ghost btn-sm" onclick="clearUAFilter()" data-ocid="admin.analytics.clear.button">Clear</button>
           </div>
         </div>
-
-        <!-- Per-user stat cards -->
         <div id="ua-user-cards" class="report-stat-grid mb-20"></div>
-
-        <!-- Charts row -->
         <div class="charts-grid mb-20">
-          <div class="chart-card">
-            <h3>Entries per User</h3>
-            <div class="chart-wrap"><canvas id="chartUserEntries"></canvas></div>
-          </div>
-          <div class="chart-card">
-            <h3>Entries by Status</h3>
-            <div class="chart-wrap"><canvas id="chartUserStatus"></canvas></div>
-          </div>
+          <div class="chart-card"><h3>Entries per User</h3><div class="chart-wrap"><canvas id="chartUserEntries"></canvas></div></div>
+          <div class="chart-card"><h3>Entries by Status</h3><div class="chart-wrap"><canvas id="chartUserStatus"></canvas></div></div>
         </div>
-
         <div class="charts-grid mb-20">
-          <div class="chart-card">
-            <h3>Entries by Name Type</h3>
-            <div class="chart-wrap"><canvas id="chartNameType"></canvas></div>
-          </div>
-          <div class="chart-card">
-            <h3>Daily Entries (Last 30 Days)</h3>
-            <div class="chart-wrap"><canvas id="chartDaily"></canvas></div>
-          </div>
+          <div class="chart-card"><h3>Entries by Name Type</h3><div class="chart-wrap"><canvas id="chartNameType"></canvas></div></div>
+          <div class="chart-card"><h3>Daily Entries (Last 30 Days)</h3><div class="chart-wrap"><canvas id="chartDaily"></canvas></div></div>
         </div>
-
-        <!-- Per-user detail table -->
         <div class="card">
           <h3 style="margin-bottom:14px;font-size:1rem;color:var(--text-muted)">Per-User Breakdown</h3>
           <div class="table-wrap">
             <table class="data-table" id="ua-table">
               <thead>
-                <tr><th>User</th><th>Total</th><th>Draft</th><th>In Process</th><th>Dispatched</th><th>Delivered</th><th>Completed</th><th>Email Sent</th><th>Last Active</th></tr>
+                <tr><th>User</th><th>Role</th><th>Total</th><th>Draft</th><th>In Process</th><th>Dispatched</th><th>Delivered</th><th>Completed</th><th>Email Sent</th><th>Last Active</th></tr>
               </thead>
               <tbody id="ua-tbody"></tbody>
             </table>
@@ -264,30 +232,21 @@
             <button type="button" class="btn btn-primary btn-sm" onclick="exportExcel()" data-ocid="admin.reports.excel.button">⬇ Export Excel</button>
           </div>
         </div>
-
         <div class="filters-bar">
-          <select class="form-control" id="r-filter-status" onchange="loadReports()" data-ocid="admin.reports.status.select">
-            <option value="">All Statuses</option>
-          </select>
-          <select class="form-control" id="r-filter-website" onchange="loadReports()" data-ocid="admin.reports.website.select">
-            <option value="">All Websites</option>
-          </select>
-          <select class="form-control" id="r-filter-dtype" onchange="loadReports()" data-ocid="admin.reports.dtype.select">
-            <option value="">All Dispatch Types</option>
-          </select>
+          <select class="form-control" id="r-filter-status" onchange="loadReports()" data-ocid="admin.reports.status.select"><option value="">All Statuses</option></select>
+          <select class="form-control" id="r-filter-website" onchange="loadReports()" data-ocid="admin.reports.website.select"><option value="">All Websites</option></select>
+          <select class="form-control" id="r-filter-dtype" onchange="loadReports()" data-ocid="admin.reports.dtype.select"><option value="">All Dispatch Types</option></select>
           <input type="date" id="r-date-from" class="form-control" onchange="loadReports()" data-ocid="admin.reports.date_from.input" />
           <input type="date" id="r-date-to" class="form-control" onchange="loadReports()" data-ocid="admin.reports.date_to.input" />
           <button type="button" class="btn btn-ghost btn-sm" onclick="clearReportFilters()" data-ocid="admin.reports.clear.button">Clear</button>
         </div>
-
         <div class="report-stat-grid" id="report-stats"></div>
-
         <div class="card">
           <h3 style="margin-bottom:14px;font-size:1rem;color:var(--text-muted)">Filtered Entries Preview</h3>
           <div class="table-wrap">
             <table class="data-table">
               <thead>
-                <tr><th>Sl</th><th>Name</th><th>Order ID</th><th>Website</th><th>Dispatch Type</th><th>Tracking</th><th>Status</th><th>Created By</th><th>Date</th></tr>
+                <tr><th>Sl</th><th>Name</th><th>Order ID</th><th>Website</th><th>Dispatch Type</th><th>Tracking</th><th>Priority</th><th>Status</th><th>Assigned To</th><th>Created By</th><th>Date</th></tr>
               </thead>
               <tbody id="report-tbody"></tbody>
             </table>
@@ -296,6 +255,63 @@
             <div class="empty-icon" style="font-size:2rem">📋</div>
             <p>No entries match the current filters.</p>
           </div>
+        </div>
+      </section>
+
+      <!-- ══════════════ TAB: SETTINGS ══════════════ -->
+      <section id="tab-settings" class="fade-in hidden">
+        <div class="page-header">
+          <h2>Settings</h2>
+          <button type="button" class="btn btn-primary btn-sm" onclick="saveAllSettings()" data-ocid="admin.settings.save.button">💾 Save All Settings</button>
+        </div>
+
+        <!-- Websites -->
+        <div class="card settings-section">
+          <h3>Website Options</h3>
+          <div class="tag-list" id="tags-websites"></div>
+          <div class="add-tag-row">
+            <input type="text" class="form-control" id="add-website-input" placeholder="Add new website…" data-ocid="admin.settings.website.input" />
+            <button type="button" class="btn btn-accent btn-sm" onclick="addTag('websites','add-website-input')" data-ocid="admin.settings.website.button">+ Add</button>
+          </div>
+        </div>
+
+        <!-- Name Types -->
+        <div class="card settings-section">
+          <h3>Name Type Options</h3>
+          <div class="tag-list" id="tags-nameTypes"></div>
+          <div class="add-tag-row">
+            <input type="text" class="form-control" id="add-nametype-input" placeholder="Add new name type…" data-ocid="admin.settings.nametype.input" />
+            <button type="button" class="btn btn-accent btn-sm" onclick="addTag('nameTypes','add-nametype-input')" data-ocid="admin.settings.nametype.button">+ Add</button>
+          </div>
+        </div>
+
+        <!-- Dispatch Types -->
+        <div class="card settings-section">
+          <h3>Dispatch Type Options</h3>
+          <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:10px">Note: "Post Card" and "Gift" types do not require a tracking number.</p>
+          <div class="tag-list" id="tags-dispatchTypes"></div>
+          <div class="add-tag-row">
+            <input type="text" class="form-control" id="add-dtype-input" placeholder="Add new dispatch type…" data-ocid="admin.settings.dtype.input" />
+            <button type="button" class="btn btn-accent btn-sm" onclick="addTag('dispatchTypes','add-dtype-input')" data-ocid="admin.settings.dtype.button">+ Add</button>
+          </div>
+        </div>
+
+        <!-- Priorities -->
+        <div class="card settings-section">
+          <h3>Priority Levels</h3>
+          <div class="tag-list" id="tags-priorities"></div>
+          <div class="add-tag-row">
+            <input type="text" class="form-control" id="add-priority-input" placeholder="Add new priority…" data-ocid="admin.settings.priority.input" />
+            <button type="button" class="btn btn-accent btn-sm" onclick="addTag('priorities','add-priority-input')" data-ocid="admin.settings.priority.button">+ Add</button>
+          </div>
+        </div>
+
+        <!-- Tracking URLs -->
+        <div class="card settings-section">
+          <h3>Tracking URLs per Dispatch Type</h3>
+          <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:14px">These URLs are included in the email template for each dispatch type so customers can track their parcel.</p>
+          <div id="tracking-url-rows"></div>
+          <button type="button" class="btn btn-primary btn-sm mt-16" onclick="saveTrackingUrls()" data-ocid="admin.settings.tracking_urls.save.button">💾 Save Tracking URLs</button>
         </div>
       </section>
 
@@ -335,6 +351,7 @@
             <label for="tm-role">Role <span class="required">*</span></label>
             <select id="tm-role" class="form-control" data-ocid="admin.team.role.select">
               <option value="dispatcher">Dispatcher</option>
+              <option value="assigner">Assigner</option>
               <option value="viewer">Viewer</option>
             </select>
           </div>
@@ -359,7 +376,7 @@
 <div class="modal-overlay" id="email-modal-overlay" data-ocid="admin.email.modal">
   <div class="modal modal-lg">
     <div class="modal-header">
-      <h3>📧 Send Email Notification</h3>
+      <h3>📧 Send Notification</h3>
       <button type="button" class="modal-close" onclick="closeEmailModal()" data-ocid="admin.email.modal.close_button">✕</button>
     </div>
     <div class="modal-body">
@@ -368,17 +385,22 @@
         <input type="email" id="em-to" class="form-control" placeholder="customer@email.com" data-ocid="admin.email.to.input" />
       </div>
       <div class="form-group">
+        <label for="em-phone">Customer Phone (for WhatsApp)</label>
+        <input type="text" id="em-phone" class="form-control" placeholder="e.g. 919876543210" data-ocid="admin.email.phone.input" />
+      </div>
+      <div class="form-group">
         <label for="em-subject">Subject</label>
         <input type="text" id="em-subject" class="form-control" data-ocid="admin.email.subject.input" />
       </div>
       <div class="form-group">
-        <label for="em-body">Email Body</label>
+        <label for="em-body">Message Body</label>
         <textarea id="em-body" class="form-control" rows="12" style="font-family:monospace;font-size:0.85rem" data-ocid="admin.email.body.textarea"></textarea>
       </div>
     </div>
     <div class="modal-footer">
       <button type="button" class="btn btn-ghost" onclick="copyEmailToClipboard()" data-ocid="admin.email.copy.button">📋 Copy</button>
-      <button type="button" class="btn btn-outline" onclick="openInGmail()" data-ocid="admin.email.gmail.button">✉️ Open in Gmail</button>
+      <button type="button" class="btn btn-outline" onclick="openInGmail()" data-ocid="admin.email.gmail.button">✉️ Gmail</button>
+      <button type="button" class="btn btn-outline" onclick="openWhatsAppAdmin()" data-ocid="admin.email.whatsapp.button" style="background:#25d366;color:#fff;border-color:#25d366">💬 WhatsApp</button>
       <button type="button" class="btn btn-primary" onclick="markEmailSent()" data-ocid="admin.email.sent.button">✅ Mark as Sent</button>
       <button type="button" class="btn btn-ghost" onclick="closeEmailModal()" data-ocid="admin.email.modal.cancel_button">Close</button>
     </div>
@@ -391,18 +413,16 @@
 /* ── Init ─────────────────────────────────────────────────── */
 let SESSION = null;
 let currentEmailEntryId = null;
-let chartWebsite = null;
-let chartDispatch = null;
-let chartStatus = null;
-let chartDispatchers = null;
-let chartUserEntries = null;
-let chartUserStatus = null;
-let chartNameType = null;
-let chartDaily = null;
+let chartWebsite = null, chartDispatch = null, chartStatus = null, chartDispatchers = null;
+let chartUserEntries = null, chartUserStatus = null, chartNameType = null, chartDaily = null;
+let chartPriority = null, chartRole = null;
 let filteredDispatches = [];
 let reportFiltered = [];
 
-(function init() {
+/* Editable settings state */
+let settingsState = {};
+
+document.addEventListener('DOMContentLoaded', function() {
   SESSION = checkSession('admin');
   if (!SESSION) return;
 
@@ -410,25 +430,36 @@ let reportFiltered = [];
   document.getElementById('user-avatar').textContent = SESSION.name.charAt(0).toUpperCase();
   updateDarkToggle();
 
-  // Populate filter selects
   populateFilterSelects();
-
-  // Load initial tab
   switchTab('dashboard');
   updateBadges();
-})();
+
+  // Select-all checkbox
+  var saEl = document.getElementById('select-all');
+  if (saEl) {
+    saEl.addEventListener('change', function() {
+      document.querySelectorAll('.dispatch-check').forEach(function(cb) { cb.checked = saEl.checked; });
+      updateBulkBar();
+    });
+  }
+});
 
 /* ── Sidebar ──────────────────────────────────────────────── */
 function openSidebar()  { document.getElementById('sidebar').classList.add('open'); }
 function closeSidebar() { document.getElementById('sidebar').classList.remove('open'); }
 
 /* ── Tab Switching ────────────────────────────────────────── */
-const tabTitles = { dashboard: 'Analytics Dashboard', team: 'Team Members', dispatches: 'All Dispatches', analytics: 'User Analytics', reports: 'Reports & Export' };
+const tabTitles = {
+  dashboard: 'Analytics Dashboard', team: 'Team Members',
+  dispatches: 'All Dispatches', analytics: 'User Analytics',
+  reports: 'Reports & Export', settings: 'Settings'
+};
 
 function switchTab(tabName) {
-  ['dashboard','team','dispatches','analytics','reports'].forEach(function(t) {
+  ['dashboard','team','dispatches','analytics','reports','settings'].forEach(function(t) {
     document.getElementById('tab-' + t).classList.toggle('hidden', t !== tabName);
-    document.querySelector('[data-tab="' + t + '"]').classList.toggle('active', t === tabName);
+    var navEl = document.querySelector('[data-tab="' + t + '"]');
+    if (navEl) navEl.classList.toggle('active', t === tabName);
   });
   document.getElementById('tab-title').textContent = tabTitles[tabName] || tabName;
 
@@ -437,98 +468,62 @@ function switchTab(tabName) {
   if (tabName === 'dispatches') loadDispatches();
   if (tabName === 'analytics')  loadUserAnalytics();
   if (tabName === 'reports')    loadReports();
+  if (tabName === 'settings')   loadSettings();
 }
 
 /* ── Badges ───────────────────────────────────────────────── */
 function updateBadges() {
-  const users = getUsers().filter(function(u) { return u.role !== 'admin'; });
-  const dispatches = getDispatches();
+  var users = getUsers().filter(function(u) { return u.role !== 'admin'; });
   document.getElementById('badge-team').textContent = users.length;
-  document.getElementById('badge-dispatches').textContent = dispatches.length;
+  document.getElementById('badge-dispatches').textContent = getDispatches().length;
 }
 
 /* ── Populate filter dropdowns ────────────────────────────── */
 function populateFilterSelects() {
-  // Status options
+  var statuses = STATUSES;
   ['d-filter-status','r-filter-status'].forEach(function(id) {
-    const sel = document.getElementById(id);
-    STATUSES.forEach(function(s) {
-      const opt = document.createElement('option');
-      opt.value = s; opt.textContent = s;
-      sel.appendChild(opt);
-    });
+    var sel = document.getElementById(id); if (!sel) return;
+    statuses.forEach(function(s) { var o = document.createElement('option'); o.value = s; o.textContent = s; sel.appendChild(o); });
   });
-  // Website options
+  var websites = WEBSITES.get();
   ['d-filter-website','r-filter-website'].forEach(function(id) {
-    const sel = document.getElementById(id);
-    WEBSITES.forEach(function(w) {
-      const opt = document.createElement('option');
-      opt.value = w; opt.textContent = w;
-      sel.appendChild(opt);
-    });
+    var sel = document.getElementById(id); if (!sel) return;
+    websites.forEach(function(w) { var o = document.createElement('option'); o.value = w; o.textContent = w; sel.appendChild(o); });
   });
-  // Dispatch type
+  var dtypes = DISPATCH_TYPES.get();
   ['d-filter-dtype','r-filter-dtype'].forEach(function(id) {
-    const sel = document.getElementById(id);
-    DISPATCH_TYPES.forEach(function(d) {
-      const opt = document.createElement('option');
-      opt.value = d; opt.textContent = d;
-      sel.appendChild(opt);
-    });
+    var sel = document.getElementById(id); if (!sel) return;
+    dtypes.forEach(function(d) { var o = document.createElement('option'); o.value = d; o.textContent = d; sel.appendChild(o); });
   });
-  // Name type
-  const ntSel = document.getElementById('d-filter-nametype');
-  if (ntSel) {
-    NAME_TYPES.forEach(function(t) {
-      const opt = document.createElement('option');
-      opt.value = t; opt.textContent = t;
-      ntSel.appendChild(opt);
-    });
-  }
-  // Bulk status
-  const bulkSel = document.getElementById('bulk-status');
-  STATUSES.forEach(function(s) {
-    const opt = document.createElement('option');
-    opt.value = s; opt.textContent = s;
-    bulkSel.appendChild(opt);
-  });
+  var ntSel = document.getElementById('d-filter-nametype');
+  if (ntSel) NAME_TYPES.get().forEach(function(t) { var o = document.createElement('option'); o.value = t; o.textContent = t; ntSel.appendChild(o); });
+
+  var prioSel = document.getElementById('d-filter-priority');
+  if (prioSel) PRIORITIES.get().forEach(function(p) { var o = document.createElement('option'); o.value = p; o.textContent = p; prioSel.appendChild(o); });
+
+  var bulkSel = document.getElementById('bulk-status');
+  if (bulkSel) statuses.forEach(function(s) { var o = document.createElement('option'); o.value = s; o.textContent = s; bulkSel.appendChild(o); });
 }
 
 /* ══════════════════════════════════════════════════
    TAB: DASHBOARD
 ══════════════════════════════════════════════════ */
 function loadDashboard() {
-  let dispatches = getDispatches();
-  const from = document.getElementById('dash-date-from').value;
-  const to   = document.getElementById('dash-date-to').value;
-  if (from) dispatches = dispatches.filter(function(d) { return d.createdAt >= from; });
-  if (to)   dispatches = dispatches.filter(function(d) { return d.createdAt <= to + 'T23:59:59'; });
+  var dispatches = getDispatches();
+  var from = document.getElementById('dash-date-from').value;
+  var to   = document.getElementById('dash-date-to').value;
+  if (from) dispatches = dispatches.filter(function(d) { return (d.createdAt || '') >= from; });
+  if (to)   dispatches = dispatches.filter(function(d) { return (d.createdAt || '') <= to + 'T23:59:59'; });
 
-  // Stat cards
-  const counts = { total: dispatches.length, 'In Process': 0, 'Dispatched': 0, 'Delivered': 0, 'Completed': 0 };
+  var counts = { total: dispatches.length, 'In Process': 0, Dispatched: 0, Delivered: 0, Completed: 0, Draft: 0 };
   dispatches.forEach(function(d) { if (counts[d.status] !== undefined) counts[d.status]++; });
 
-  document.getElementById('dash-stats').innerHTML = `
-    <div class="stat-card stat-total">
-      <div class="stat-icon">📦</div>
-      <div class="stat-info"><h3>${counts.total}</h3><p>Total Entries</p></div>
-    </div>
-    <div class="stat-card stat-process">
-      <div class="stat-icon">🔄</div>
-      <div class="stat-info"><h3>${counts['In Process']}</h3><p>In Process</p></div>
-    </div>
-    <div class="stat-card stat-dispatch">
-      <div class="stat-icon">🚚</div>
-      <div class="stat-info"><h3>${counts['Dispatched']}</h3><p>Dispatched</p></div>
-    </div>
-    <div class="stat-card stat-delivered">
-      <div class="stat-icon">✅</div>
-      <div class="stat-info"><h3>${counts['Delivered']}</h3><p>Delivered</p></div>
-    </div>
-    <div class="stat-card stat-complete">
-      <div class="stat-icon">🏆</div>
-      <div class="stat-info"><h3>${counts['Completed']}</h3><p>Completed</p></div>
-    </div>`;
+  document.getElementById('dash-stats').innerHTML =
+    '<div class="stat-card stat-total"><div class="stat-icon">📦</div><div class="stat-info"><h3>' + counts.total + '</h3><p>Total Entries</p></div></div>' +
+    '<div class="stat-card stat-process"><div class="stat-icon">🔄</div><div class="stat-info"><h3>' + counts['In Process'] + '</h3><p>In Process</p></div></div>' +
+    '<div class="stat-card stat-dispatch"><div class="stat-icon">🚚</div><div class="stat-info"><h3>' + counts.Dispatched + '</h3><p>Dispatched</p></div></div>' +
+    '<div class="stat-card stat-delivered"><div class="stat-icon">✅</div><div class="stat-info"><h3>' + counts.Delivered + '</h3><p>Delivered</p></div></div>' +
+    '<div class="stat-card stat-complete"><div class="stat-icon">🏆</div><div class="stat-info"><h3>' + counts.Completed + '</h3><p>Completed</p></div></div>';
 
   renderCharts(dispatches);
   renderActivityFeed();
@@ -541,99 +536,77 @@ function clearDashFilter() {
 }
 
 function renderCharts(dispatches) {
-  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-  const textColor = isDark ? '#c5cae9' : '#374151';
+  var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  var textColor = isDark ? '#c5cae9' : '#374151';
   Chart.defaults.color = textColor;
 
-  // Website chart
-  const websiteCounts = {};
-  WEBSITES.forEach(function(w) { websiteCounts[w] = 0; });
-  dispatches.forEach(function(d) { if (websiteCounts[d.website] !== undefined) websiteCounts[d.website]++; });
-
+  var websites = WEBSITES.get();
+  var wCounts = {}; websites.forEach(function(w){ wCounts[w]=0; });
+  dispatches.forEach(function(d){ if(wCounts[d.website]!==undefined) wCounts[d.website]++; else wCounts[d.website]=(wCounts[d.website]||0)+1; });
   if (chartWebsite) chartWebsite.destroy();
-  const ctxW = document.getElementById('chartWebsite').getContext('2d');
-  chartWebsite = new Chart(ctxW, {
-    type: 'pie',
-    data: {
-      labels: Object.keys(websiteCounts),
-      datasets: [{ data: Object.values(websiteCounts), backgroundColor: ['#1a237e','#3949ab','#5c6bc0','#f9a825','#ffd54f'], borderWidth: 2, borderColor: isDark ? '#1c1f2e' : '#fff' }]
-    },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } } }
+  chartWebsite = new Chart(document.getElementById('chartWebsite').getContext('2d'), {
+    type:'pie', data:{ labels:Object.keys(wCounts), datasets:[{ data:Object.values(wCounts), backgroundColor:['#1a237e','#3949ab','#5c6bc0','#f9a825','#ffd54f','#7e57c2'], borderWidth:2, borderColor:isDark?'#1c1f2e':'#fff' }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom', labels:{ font:{ size:11 } } } } }
   });
 
-  // Dispatch type chart
-  const dtCounts = {};
-  DISPATCH_TYPES.forEach(function(t) { dtCounts[t] = 0; });
-  dispatches.forEach(function(d) { if (dtCounts[d.dispatchType] !== undefined) dtCounts[d.dispatchType]++; });
-
+  var dtypes = DISPATCH_TYPES.get();
+  var dtCounts = {}; dtypes.forEach(function(t){ dtCounts[t]=0; });
+  dispatches.forEach(function(d){ dtCounts[d.dispatchType]=(dtCounts[d.dispatchType]||0)+1; });
   if (chartDispatch) chartDispatch.destroy();
-  const ctxD = document.getElementById('chartDispatch').getContext('2d');
-  chartDispatch = new Chart(ctxD, {
-    type: 'bar',
-    data: {
-      labels: Object.keys(dtCounts),
-      datasets: [{ label: 'Entries', data: Object.values(dtCounts), backgroundColor: '#3949ab', borderRadius: 6 }]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: { y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: isDark ? '#2e3350' : '#e5e7eb' } }, x: { grid: { display: false } } }
-    }
+  chartDispatch = new Chart(document.getElementById('chartDispatch').getContext('2d'), {
+    type:'bar', data:{ labels:Object.keys(dtCounts), datasets:[{ label:'Entries', data:Object.values(dtCounts), backgroundColor:'#3949ab', borderRadius:6 }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ y:{beginAtZero:true,ticks:{stepSize:1}}, x:{grid:{display:false}} } }
   });
 
-  // Status chart
-  const statusCounts = {};
-  STATUSES.forEach(function(s) { statusCounts[s] = 0; });
-  dispatches.forEach(function(d) { if (statusCounts[d.status] !== undefined) statusCounts[d.status]++; });
+  var sCounts = {}; STATUSES.forEach(function(s){ sCounts[s]=0; });
+  dispatches.forEach(function(d){ if(sCounts[d.status]!==undefined) sCounts[d.status]++; });
   if (chartStatus) chartStatus.destroy();
-  const ctxSt = document.getElementById('chartStatus').getContext('2d');
-  chartStatus = new Chart(ctxSt, {
-    type: 'doughnut',
-    data: {
-      labels: Object.keys(statusCounts),
-      datasets: [{ data: Object.values(statusCounts), backgroundColor: ['#78909c','#1565c0','#f9a825','#2e7d32','#388e3c'], borderWidth: 2, borderColor: isDark ? '#1c1f2e' : '#fff' }]
-    },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } } }
+  chartStatus = new Chart(document.getElementById('chartStatus').getContext('2d'), {
+    type:'doughnut', data:{ labels:Object.keys(sCounts), datasets:[{ data:Object.values(sCounts), backgroundColor:['#78909c','#1565c0','#f9a825','#2e7d32','#388e3c'], borderWidth:2, borderColor:isDark?'#1c1f2e':'#fff' }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom', labels:{ font:{ size:11 } } } } }
   });
 
-  // Top dispatchers chart
-  const dispatcherCounts = {};
-  dispatches.forEach(function(d) {
-    const n = d.createdByName || 'Unknown';
-    dispatcherCounts[n] = (dispatcherCounts[n] || 0) + 1;
-  });
-  const topNames = Object.keys(dispatcherCounts).sort(function(a,b){ return dispatcherCounts[b]-dispatcherCounts[a]; }).slice(0,8);
+  var dispatcherCounts = {};
+  dispatches.forEach(function(d){ var n=d.createdByName||'Unknown'; dispatcherCounts[n]=(dispatcherCounts[n]||0)+1; });
+  var topNames = Object.keys(dispatcherCounts).sort(function(a,b){ return dispatcherCounts[b]-dispatcherCounts[a]; }).slice(0,8);
   if (chartDispatchers) chartDispatchers.destroy();
-  const ctxDp = document.getElementById('chartDispatchers').getContext('2d');
-  chartDispatchers = new Chart(ctxDp, {
-    type: 'bar',
-    data: {
-      labels: topNames,
-      datasets: [{ label: 'Entries', data: topNames.map(function(n){ return dispatcherCounts[n]; }), backgroundColor: '#5c6bc0', borderRadius: 6 }]
-    },
-    options: {
-      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: { x: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: isDark ? '#2e3350' : '#e5e7eb' } }, y: { grid: { display: false } } }
-    }
+  chartDispatchers = new Chart(document.getElementById('chartDispatchers').getContext('2d'), {
+    type:'bar', data:{ labels:topNames, datasets:[{ label:'Entries', data:topNames.map(function(n){ return dispatcherCounts[n]; }), backgroundColor:'#5c6bc0', borderRadius:6 }] },
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ x:{beginAtZero:true,ticks:{stepSize:1}}, y:{grid:{display:false}} } }
+  });
+
+  var priorities = PRIORITIES.get();
+  var pCounts = {}; priorities.forEach(function(p){ pCounts[p]=0; });
+  dispatches.forEach(function(d){ var p=d.priority||'Normal'; pCounts[p]=(pCounts[p]||0)+1; });
+  var pColors = priorities.map(function(p){ return PRIORITY_COLORS[p]||'#9e9e9e'; });
+  if (chartPriority) chartPriority.destroy();
+  chartPriority = new Chart(document.getElementById('chartPriority').getContext('2d'), {
+    type:'bar', data:{ labels:Object.keys(pCounts), datasets:[{ label:'Count', data:Object.values(pCounts), backgroundColor:pColors, borderRadius:6 }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ y:{beginAtZero:true,ticks:{stepSize:1}}, x:{grid:{display:false}} } }
+  });
+
+  var roleCounts = { dispatcher: 0, assigner: 0, other: 0 };
+  var users = getUsers();
+  dispatches.forEach(function(d) {
+    var u = users.find(function(u){ return u.id === d.createdBy; });
+    var role = u ? u.role : 'other';
+    if (role === 'dispatcher') roleCounts.dispatcher++;
+    else if (role === 'assigner') roleCounts.assigner++;
+    else roleCounts.other++;
+  });
+  if (chartRole) chartRole.destroy();
+  chartRole = new Chart(document.getElementById('chartRole').getContext('2d'), {
+    type:'doughnut', data:{ labels:['Dispatcher','Assigner','Other'], datasets:[{ data:[roleCounts.dispatcher,roleCounts.assigner,roleCounts.other], backgroundColor:['#3949ab','#f9a825','#78909c'], borderWidth:2, borderColor:isDark?'#1c1f2e':'#fff' }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom', labels:{ font:{ size:11 } } } } }
   });
 }
 
 function renderActivityFeed() {
-  const activity = getActivity().slice(0, 20);
-  const feed = document.getElementById('activity-feed');
-  if (activity.length === 0) {
-    feed.innerHTML = '<p class="text-muted small" style="text-align:center;padding:20px">No activity yet.</p>';
-    return;
-  }
+  var activity = getActivity().slice(0, 20);
+  var feed = document.getElementById('activity-feed');
+  if (!activity.length) { feed.innerHTML = '<p class="text-muted small" style="text-align:center;padding:20px">No activity yet.</p>'; return; }
   feed.innerHTML = activity.map(function(a) {
-    return `<div class="activity-item">
-      <div class="activity-dot"></div>
-      <div>
-        <div class="activity-text"><strong>${escHtml(a.userName)}</strong> ${escHtml(a.details)}</div>
-        <div class="activity-time">${timeAgo(a.timestamp)}</div>
-      </div>
-    </div>`;
+    return '<div class="activity-item"><div class="activity-dot"></div><div><div class="activity-text"><strong>' + escHtml(a.userName) + '</strong> ' + escHtml(a.details) + '</div><div class="activity-time">' + timeAgo(a.timestamp) + '</div></div></div>';
   }).join('');
 }
 
@@ -641,34 +614,25 @@ function renderActivityFeed() {
    TAB: TEAM MEMBERS
 ══════════════════════════════════════════════════ */
 function loadTeam() {
-  const users = getUsers().filter(function(u) { return u.role !== 'admin'; });
-  const tbody = document.getElementById('team-tbody');
-  const empty = document.getElementById('team-empty');
-
+  var users = getUsers().filter(function(u) { return u.role !== 'admin'; });
+  var tbody = document.getElementById('team-tbody');
+  var empty = document.getElementById('team-empty');
   if (users.length === 0) {
-    tbody.innerHTML = '';
-    empty.classList.remove('hidden');
-    document.getElementById('team-table').classList.add('hidden');
-    return;
+    tbody.innerHTML = ''; empty.classList.remove('hidden');
+    document.getElementById('team-table').classList.add('hidden'); return;
   }
   empty.classList.add('hidden');
   document.getElementById('team-table').classList.remove('hidden');
-
+  var roleBadge = { dispatcher:'badge-inprocess', assigner:'badge-delivered', viewer:'badge-draft' };
   tbody.innerHTML = users.map(function(u, i) {
-    return `<tr data-ocid="admin.team.row.${i+1}">
-      <td>${i+1}</td>
-      <td><strong>${escHtml(u.name)}</strong></td>
-      <td>${escHtml(u.email)}</td>
-      <td><span class="badge badge-${u.role}">${u.role}</span></td>
-      <td><span class="badge badge-${u.status}">${u.status}</span></td>
-      <td>${formatDate(u.dateAdded)}</td>
-      <td class="actions">
-        <div class="table-actions">
-          <button type="button" class="btn btn-ghost btn-sm" onclick="editTeamMember('${u.id}')" data-ocid="admin.team.edit_button.${i+1}">✏️ Edit</button>
-          <button type="button" class="btn btn-danger btn-sm" onclick="removeTeamMember('${u.id}')" data-ocid="admin.team.delete_button.${i+1}">🗑 Remove</button>
-        </div>
-      </td>
-    </tr>`;
+    return '<tr data-ocid="admin.team.row.' + (i+1) + '"><td>' + (i+1) + '</td><td><strong>' + escHtml(u.name) + '</strong></td><td>' + escHtml(u.email) + '</td>' +
+      '<td><span class="badge ' + (roleBadge[u.role]||'badge-draft') + '">' + escHtml(u.role) + '</span></td>' +
+      '<td><span class="badge badge-' + u.status + '">' + u.status + '</span></td>' +
+      '<td>' + formatDate(u.dateAdded) + '</td>' +
+      '<td class="actions"><div class="table-actions">' +
+        '<button type="button" class="btn btn-ghost btn-sm" onclick="editTeamMember(\'' + u.id + '\')" data-ocid="admin.team.edit_button.' + (i+1) + '">✏️ Edit</button>' +
+        '<button type="button" class="btn btn-danger btn-sm" onclick="removeTeamMember(\'' + u.id + '\')" data-ocid="admin.team.delete_button.' + (i+1) + '">🗑 Remove</button>' +
+      '</div></td></tr>';
   }).join('');
   updateBadges();
 }
@@ -676,15 +640,16 @@ function loadTeam() {
 function openTeamModal(prefillId) {
   document.getElementById('team-modal-title').textContent = prefillId ? 'Edit Team Member' : 'Add Team Member';
   clearTeamForm();
+  var u;
   if (prefillId) {
-    const u = getUsers().find(function(x) { return x.id === prefillId; });
+    u = getUsers().find(function(x) { return x.id === prefillId; });
     if (u) {
-      document.getElementById('tm-id').value = u.id;
-      document.getElementById('tm-name').value = u.name;
-      document.getElementById('tm-email').value = u.email;
+      document.getElementById('tm-id').value       = u.id;
+      document.getElementById('tm-name').value     = u.name;
+      document.getElementById('tm-email').value    = u.email;
       document.getElementById('tm-password').value = u.password;
-      document.getElementById('tm-role').value = u.role;
-      document.getElementById('tm-status').value = u.status;
+      document.getElementById('tm-role').value     = u.role;
+      document.getElementById('tm-status').value   = u.status;
     }
   }
   document.getElementById('team-modal-overlay').classList.add('open');
@@ -700,50 +665,47 @@ function clearTeamForm() {
 }
 
 function saveTeamMember() {
-  let valid = true;
-  const id       = document.getElementById('tm-id').value;
-  const name     = document.getElementById('tm-name').value.trim();
-  const email    = document.getElementById('tm-email').value.trim();
-  const password = document.getElementById('tm-password').value.trim();
-  const role     = document.getElementById('tm-role').value;
-  const status   = document.getElementById('tm-status').value;
+  var valid = true;
+  var id       = document.getElementById('tm-id').value;
+  var name     = document.getElementById('tm-name').value.trim();
+  var email    = document.getElementById('tm-email').value.trim();
+  var password = document.getElementById('tm-password').value.trim();
+  var role     = document.getElementById('tm-role').value;
+  var status   = document.getElementById('tm-status').value;
 
   if (!name)     { document.getElementById('tm-name-err').textContent = 'Name is required'; valid = false; }
   if (!email)    { document.getElementById('tm-email-err').textContent = 'Email is required'; valid = false; }
   if (!password) { document.getElementById('tm-password-err').textContent = 'Password is required'; valid = false; }
   if (!valid) return;
 
-  const users = getUsers();
-  const emailExists = users.some(function(u) { return u.email.toLowerCase() === email.toLowerCase() && u.id !== id; });
+  var users = getUsers();
+  var emailExists = users.some(function(u) { return u.email.toLowerCase() === email.toLowerCase() && u.id !== id; });
   if (emailExists) { document.getElementById('tm-email-err').textContent = 'Email already in use'; return; }
 
+  var idx;
   if (id) {
-    // Edit
-    const idx = users.findIndex(function(u) { return u.id === id; });
+    idx = users.findIndex(function(u) { return u.id === id; });
     if (idx !== -1) {
-      users[idx] = Object.assign(users[idx], { name, email, password, role, status });
+      Object.assign(users[idx], { name, email, password, role, status });
       saveUsers(users);
       logActivity('update', 'Updated team member: ' + name);
       showToast('Team member updated', 'success');
     }
   } else {
-    // Add
     users.push({ id: genId(), name, email, password, role, status, dateAdded: new Date().toISOString() });
     saveUsers(users);
     logActivity('create', 'Added team member: ' + name);
     showToast('Team member added', 'success');
   }
-
   closeTeamModal();
   loadTeam();
 }
 
 function removeTeamMember(id) {
-  const user = getUsers().find(function(u) { return u.id === id; });
+  var user = getUsers().find(function(u) { return u.id === id; });
   if (!user) return;
   confirmAction('Remove <strong>' + escHtml(user.name) + '</strong>? This cannot be undone.', function() {
-    let users = getUsers();
-    users = users.filter(function(u) { return u.id !== id; });
+    var users = getUsers().filter(function(u) { return u.id !== id; });
     saveUsers(users);
     logActivity('delete', 'Removed team member: ' + user.name);
     showToast('Team member removed', 'success');
@@ -754,33 +716,29 @@ function removeTeamMember(id) {
 /* ══════════════════════════════════════════════════
    TAB: ALL DISPATCHES
 ══════════════════════════════════════════════════ */
-function loadDispatches() {
-  filterDispatches();
-}
+function loadDispatches() { filterDispatches(); }
 
 function getFilteredDispatches() {
-  let dispatches = getDispatches();
-  const search   = (document.getElementById('d-search').value || '').toLowerCase();
-  const status   = document.getElementById('d-filter-status').value;
-  const website  = document.getElementById('d-filter-website').value;
-  const nametype = document.getElementById('d-filter-nametype') ? document.getElementById('d-filter-nametype').value : '';
-  const dtype    = document.getElementById('d-filter-dtype').value;
-  const from     = document.getElementById('d-date-from').value;
-  const to       = document.getElementById('d-date-to').value;
+  var dispatches = getDispatches();
+  var search   = (document.getElementById('d-search').value || '').toLowerCase();
+  var status   = document.getElementById('d-filter-status').value;
+  var website  = document.getElementById('d-filter-website').value;
+  var nametype = (document.getElementById('d-filter-nametype') || {}).value || '';
+  var dtype    = document.getElementById('d-filter-dtype').value;
+  var priority = (document.getElementById('d-filter-priority') || {}).value || '';
+  var from     = document.getElementById('d-date-from').value;
+  var to       = document.getElementById('d-date-to').value;
 
-  if (search) dispatches = dispatches.filter(function(d) {
-    return (d.customerName||'').toLowerCase().includes(search) ||
-           (d.orderId||'').toLowerCase().includes(search) ||
-           (d.trackingNo||'').toLowerCase().includes(search);
-  });
+  if (search)   dispatches = dispatches.filter(function(d) { return (d.customerName||'').toLowerCase().includes(search)||(d.orderId||'').toLowerCase().includes(search)||(d.trackingNo||'').toLowerCase().includes(search); });
   if (status)   dispatches = dispatches.filter(function(d) { return d.status === status; });
   if (website)  dispatches = dispatches.filter(function(d) { return d.website === website; });
   if (nametype) dispatches = dispatches.filter(function(d) { return d.nameType === nametype; });
   if (dtype)    dispatches = dispatches.filter(function(d) { return d.dispatchType === dtype; });
-  if (from)     dispatches = dispatches.filter(function(d) { return d.createdAt >= from; });
-  if (to)       dispatches = dispatches.filter(function(d) { return d.createdAt <= to + 'T23:59:59'; });
+  if (priority) dispatches = dispatches.filter(function(d) { return (d.priority||'Normal') === priority; });
+  if (from)     dispatches = dispatches.filter(function(d) { return (d.createdAt||'') >= from; });
+  if (to)       dispatches = dispatches.filter(function(d) { return (d.createdAt||'') <= to + 'T23:59:59'; });
 
-  return dispatches.sort(function(a, b) { return new Date(b.createdAt) - new Date(a.createdAt); });
+  return dispatches.sort(function(a,b) { return new Date(b.createdAt) - new Date(a.createdAt); });
 }
 
 function filterDispatches() {
@@ -789,98 +747,65 @@ function filterDispatches() {
 }
 
 function renderDispatchTable(dispatches) {
-  const tbody = document.getElementById('dispatches-tbody');
-  const empty = document.getElementById('dispatches-empty');
-
+  var tbody = document.getElementById('dispatches-tbody');
+  var empty = document.getElementById('dispatches-empty');
   if (dispatches.length === 0) {
-    tbody.innerHTML = '';
-    empty.classList.remove('hidden');
-    document.getElementById('dispatches-table').classList.add('hidden');
-    return;
+    tbody.innerHTML = ''; empty.classList.remove('hidden');
+    document.getElementById('dispatches-table').classList.add('hidden'); return;
   }
   empty.classList.add('hidden');
   document.getElementById('dispatches-table').classList.remove('hidden');
 
   tbody.innerHTML = dispatches.map(function(d, i) {
-    const statusOpts = STATUSES.map(function(s) {
-      return '<option value="' + s + '"' + (d.status === s ? ' selected' : '') + '>' + s + '</option>';
-    }).join('');
-
-    return `<tr id="drow-${d.id}" data-ocid="admin.dispatches.row.${i+1}">
-      <td><input type="checkbox" class="row-check dispatch-check" data-id="${d.id}" data-ocid="admin.dispatches.checkbox.${i+1}" onchange="updateBulkBar()" /></td>
-      <td>${escHtml(String(d.slNo))}</td>
-      <td><strong>${escHtml(d.customerName)}</strong><br><span class="small text-muted">${escHtml(d.customerEmail||'')}</span></td>
-      <td class="truncate" title="${escHtml(d.address)}">${escHtml(d.address||'—')}</td>
-      <td><strong>${escHtml(d.orderId)}</strong></td>
-      <td>${escHtml(d.website)}</td>
-      <td>${escHtml(d.nameType||'—')}</td>
-      <td>${escHtml(d.dispatchType)}</td>
-      <td>${escHtml(d.trackingNo||'—')}</td>
-      <td>
-        <select class="status-select" onchange="adminStatusChange('${d.id}', this.value)" ${d.status==='Completed'?'disabled':''} data-ocid="admin.dispatches.status_select.${i+1}">
-          ${statusOpts}
-        </select>
-      </td>
-      <td>${escHtml(d.createdByName)}</td>
-      <td>${formatDate(d.createdAt)}<br><span class="small text-muted">${timeAgo(d.updatedAt)}</span></td>
-      <td class="actions">
-        <div class="table-actions">
-          <button type="button" class="btn btn-ghost btn-sm" onclick="openEmailModalForEntry('${d.id}')" data-ocid="admin.dispatches.email_button.${i+1}" title="${d.emailSent ? 'Email sent' : 'Send email'}">📧${d.emailSent ? '✓' : ''}</button>
-          <button type="button" class="btn btn-danger btn-sm" onclick="adminDeleteDispatch('${d.id}')" data-ocid="admin.dispatches.delete_button.${i+1}">🗑</button>
-        </div>
-      </td>
-    </tr>`;
+    var statusOpts = STATUSES.map(function(s) { return '<option value="'+s+'"'+(d.status===s?' selected':'')+'>'+s+'</option>'; }).join('');
+    var pColor = PRIORITY_COLORS[d.priority||'Normal']||'#555';
+    return '<tr id="drow-'+d.id+'" data-ocid="admin.dispatches.row.'+(i+1)+'">' +
+      '<td><input type="checkbox" class="row-check dispatch-check" data-id="'+d.id+'" data-ocid="admin.dispatches.checkbox.'+(i+1)+'" onchange="updateBulkBar()" /></td>' +
+      '<td>'+escHtml(String(d.slNo))+'</td>' +
+      '<td><strong>'+escHtml(d.customerName)+'</strong><br><span class="small text-muted">'+escHtml(d.customerEmail||'')+'</span></td>' +
+      '<td><strong>'+escHtml(d.orderId)+'</strong></td>' +
+      '<td>'+escHtml(d.website)+'</td>' +
+      '<td>'+escHtml(d.dispatchType)+'</td>' +
+      '<td>'+escHtml(d.trackingNo||'—')+'</td>' +
+      '<td><span class="priority-badge" style="background:'+pColor+'">'+escHtml(d.priority||'Normal')+'</span></td>' +
+      '<td>'+(d.assignedToName ? '<span class="badge badge-inprocess">'+escHtml(d.assignedToName)+'</span>' : '—')+'</td>' +
+      '<td><select class="status-select" onchange="adminStatusChange(\''+d.id+'\', this.value)" '+(d.status==='Completed'?'disabled':'')+' data-ocid="admin.dispatches.status_select.'+(i+1)+'">'+statusOpts+'</select></td>' +
+      '<td>'+escHtml(d.createdByName)+'</td>' +
+      '<td>'+formatDate(d.createdAt)+'<br><span class="small text-muted">'+timeAgo(d.updatedAt)+'</span></td>' +
+      '<td class="actions"><div class="table-actions">' +
+        '<button type="button" class="btn btn-ghost btn-sm" onclick="openEmailModalForEntry(\''+d.id+'\')" data-ocid="admin.dispatches.email_button.'+(i+1)+'" title="'+(d.emailSent?'Email sent':'Send notification')+'">📧'+(d.emailSent?'✓':'')+'</button>' +
+        '<button type="button" class="btn btn-danger btn-sm" onclick="adminDeleteDispatch(\''+d.id+'\')" data-ocid="admin.dispatches.delete_button.'+(i+1)+'">🗑</button>' +
+      '</div></td></tr>';
   }).join('');
 
-  // Re-attach select-all
   document.getElementById('select-all').checked = false;
 }
 
 function adminStatusChange(id, newStatus) {
-  if (newStatus === 'Delivered') newStatus = 'Completed';
   updateDispatchStatus(id, newStatus);
   showToast('Status updated to ' + newStatus, 'success');
-  filterDispatches();
-  updateBadges();
+  filterDispatches(); updateBadges();
 }
 
 function adminDeleteDispatch(id) {
   confirmAction('Delete this dispatch entry? This cannot be undone.', function() {
-    deleteDispatch(id);
-    showToast('Entry deleted', 'success');
-    filterDispatches();
-    updateBadges();
+    deleteDispatch(id); showToast('Entry deleted', 'success');
+    filterDispatches(); updateBadges();
   }, 'Delete Entry');
 }
 
 function clearDispatchFilters() {
-  document.getElementById('d-search').value = '';
-  document.getElementById('d-filter-status').value = '';
-  document.getElementById('d-filter-website').value = '';
-  if (document.getElementById('d-filter-nametype')) document.getElementById('d-filter-nametype').value = '';
-  document.getElementById('d-filter-dtype').value = '';
-  document.getElementById('d-date-from').value = '';
-  document.getElementById('d-date-to').value = '';
+  ['d-search','d-filter-status','d-filter-website','d-filter-nametype','d-filter-dtype','d-filter-priority','d-date-from','d-date-to'].forEach(function(id) {
+    var el = document.getElementById(id); if (el) el.value = '';
+  });
   filterDispatches();
 }
 
-// Select-all
-document.addEventListener('DOMContentLoaded', function() {
-  document.getElementById('select-all').addEventListener('change', function() {
-    document.querySelectorAll('.dispatch-check').forEach(function(cb) { cb.checked = this.checked; }, this);
-    updateBulkBar();
-  });
-});
-
 function updateBulkBar() {
-  const checked = document.querySelectorAll('.dispatch-check:checked');
-  const bar = document.getElementById('bulk-bar');
-  if (checked.length > 0) {
-    bar.classList.remove('hidden');
-    document.getElementById('bulk-count').textContent = checked.length + ' selected';
-  } else {
-    bar.classList.add('hidden');
-  }
+  var checked = document.querySelectorAll('.dispatch-check:checked');
+  var bar = document.getElementById('bulk-bar');
+  if (checked.length > 0) { bar.classList.remove('hidden'); document.getElementById('bulk-count').textContent = checked.length + ' selected'; }
+  else bar.classList.add('hidden');
 }
 
 function clearBulkSelection() {
@@ -890,23 +815,19 @@ function clearBulkSelection() {
 }
 
 function applyBulkStatus() {
-  const newStatus = document.getElementById('bulk-status').value;
+  var newStatus = document.getElementById('bulk-status').value;
   if (!newStatus) { showToast('Please select a status', 'warn'); return; }
-  const checked = document.querySelectorAll('.dispatch-check:checked');
-  if (checked.length === 0) return;
-
-  const ids = Array.from(checked).map(function(cb) { return cb.dataset.id; });
+  var ids = Array.from(document.querySelectorAll('.dispatch-check:checked')).map(function(cb) { return cb.dataset.id; });
+  if (!ids.length) return;
   confirmAction('Update ' + ids.length + ' entries to <strong>' + escHtml(newStatus) + '</strong>?', function() {
     ids.forEach(function(id) { updateDispatchStatus(id, newStatus); });
     showToast(ids.length + ' entries updated to ' + newStatus, 'success');
-    clearBulkSelection();
-    filterDispatches();
-    updateBadges();
+    clearBulkSelection(); filterDispatches(); updateBadges();
   }, 'Bulk Status Update');
 }
 
 function exportAllCSV() {
-  const rows = filteredDispatches.length > 0 ? filteredDispatches : getDispatches();
+  var rows = filteredDispatches.length > 0 ? filteredDispatches : getDispatches();
   exportCSV(rows.map(dispatchToExportRow), 'vyoma_dispatches_' + new Date().toISOString().slice(0,10) + '.csv');
 }
 
@@ -914,82 +835,66 @@ function exportAllCSV() {
    TAB: REPORTS
 ══════════════════════════════════════════════════ */
 function loadReports() {
-  let dispatches = getDispatches();
-  const status  = document.getElementById('r-filter-status').value;
-  const website = document.getElementById('r-filter-website').value;
-  const dtype   = document.getElementById('r-filter-dtype').value;
-  const from    = document.getElementById('r-date-from').value;
-  const to      = document.getElementById('r-date-to').value;
+  var dispatches = getDispatches();
+  var status  = document.getElementById('r-filter-status').value;
+  var website = document.getElementById('r-filter-website').value;
+  var dtype   = document.getElementById('r-filter-dtype').value;
+  var from    = document.getElementById('r-date-from').value;
+  var to      = document.getElementById('r-date-to').value;
 
   if (status)  dispatches = dispatches.filter(function(d) { return d.status === status; });
   if (website) dispatches = dispatches.filter(function(d) { return d.website === website; });
   if (dtype)   dispatches = dispatches.filter(function(d) { return d.dispatchType === dtype; });
-  if (from)    dispatches = dispatches.filter(function(d) { return d.createdAt >= from; });
-  if (to)      dispatches = dispatches.filter(function(d) { return d.createdAt <= to + 'T23:59:59'; });
+  if (from)    dispatches = dispatches.filter(function(d) { return (d.createdAt||'') >= from; });
+  if (to)      dispatches = dispatches.filter(function(d) { return (d.createdAt||'') <= to + 'T23:59:59'; });
 
   reportFiltered = dispatches;
-
-  // Stats
-  const counts = { 'In Process': 0, 'Dispatched': 0, 'Delivered': 0, 'Completed': 0, 'Draft': 0 };
+  var counts = { 'In Process': 0, Dispatched: 0, Delivered: 0, Completed: 0, Draft: 0 };
   dispatches.forEach(function(d) { if (counts[d.status] !== undefined) counts[d.status]++; });
 
-  document.getElementById('report-stats').innerHTML = `
-    <div class="report-stat"><div class="val">${dispatches.length}</div><div class="lbl">Total Entries</div></div>
-    <div class="report-stat"><div class="val">${counts['Draft']}</div><div class="lbl">Draft</div></div>
-    <div class="report-stat"><div class="val">${counts['In Process']}</div><div class="lbl">In Process</div></div>
-    <div class="report-stat"><div class="val">${counts['Dispatched']}</div><div class="lbl">Dispatched</div></div>
-    <div class="report-stat"><div class="val">${counts['Delivered']}</div><div class="lbl">Delivered</div></div>
-    <div class="report-stat"><div class="val">${counts['Completed']}</div><div class="lbl">Completed</div></div>`;
+  document.getElementById('report-stats').innerHTML =
+    '<div class="report-stat"><div class="val">'+dispatches.length+'</div><div class="lbl">Total Entries</div></div>' +
+    '<div class="report-stat"><div class="val">'+counts.Draft+'</div><div class="lbl">Draft</div></div>' +
+    '<div class="report-stat"><div class="val">'+counts['In Process']+'</div><div class="lbl">In Process</div></div>' +
+    '<div class="report-stat"><div class="val">'+counts.Dispatched+'</div><div class="lbl">Dispatched</div></div>' +
+    '<div class="report-stat"><div class="val">'+counts.Delivered+'</div><div class="lbl">Delivered</div></div>' +
+    '<div class="report-stat"><div class="val">'+counts.Completed+'</div><div class="lbl">Completed</div></div>';
 
-  const tbody = document.getElementById('report-tbody');
-  const empty = document.getElementById('report-empty');
-  if (dispatches.length === 0) {
-    tbody.innerHTML = '';
-    empty.classList.remove('hidden');
-    return;
-  }
+  var tbody = document.getElementById('report-tbody');
+  var empty = document.getElementById('report-empty');
+  if (!dispatches.length) { tbody.innerHTML = ''; empty.classList.remove('hidden'); return; }
   empty.classList.add('hidden');
-  tbody.innerHTML = dispatches.map(function(d, i) {
-    return `<tr data-ocid="admin.reports.row.${i+1}">
-      <td>${escHtml(String(d.slNo))}</td>
-      <td>${escHtml(d.customerName)}</td>
-      <td>${escHtml(d.orderId)}</td>
-      <td>${escHtml(d.website)}</td>
-      <td>${escHtml(d.dispatchType)}</td>
-      <td>${escHtml(d.trackingNo||'—')}</td>
-      <td><span class="badge ${statusBadgeClass(d.status)}">${d.status}</span></td>
-      <td>${escHtml(d.createdByName)}</td>
-      <td>${formatDate(d.createdAt)}</td>
-    </tr>`;
+  var pColor;
+  tbody.innerHTML = dispatches.map(function(d,i) {
+    pColor = PRIORITY_COLORS[d.priority||'Normal']||'#555';
+    return '<tr data-ocid="admin.reports.row.'+(i+1)+'">' +
+      '<td>'+escHtml(String(d.slNo))+'</td><td>'+escHtml(d.customerName)+'</td><td>'+escHtml(d.orderId)+'</td>' +
+      '<td>'+escHtml(d.website)+'</td><td>'+escHtml(d.dispatchType)+'</td><td>'+escHtml(d.trackingNo||'—')+'</td>' +
+      '<td><span class="priority-badge" style="background:'+pColor+'">'+escHtml(d.priority||'Normal')+'</span></td>' +
+      '<td><span class="badge '+statusBadgeClass(d.status)+'">'+d.status+'</span></td>' +
+      '<td>'+(d.assignedToName||'—')+'</td><td>'+escHtml(d.createdByName)+'</td><td>'+formatDate(d.createdAt)+'</td></tr>';
   }).join('');
 }
 
 function clearReportFilters() {
-  ['r-filter-status','r-filter-website','r-filter-dtype'].forEach(function(id) { document.getElementById(id).value = ''; });
-  document.getElementById('r-date-from').value = '';
-  document.getElementById('r-date-to').value = '';
+  ['r-filter-status','r-filter-website','r-filter-dtype','r-date-from','r-date-to'].forEach(function(id) { document.getElementById(id).value = ''; });
   loadReports();
 }
 
 function exportReportCSV() {
-  const rows = reportFiltered.length > 0 ? reportFiltered : getDispatches();
+  var rows = reportFiltered.length > 0 ? reportFiltered : getDispatches();
   exportCSV(rows.map(dispatchToExportRow), 'vyoma_report_' + new Date().toISOString().slice(0,10) + '.csv');
 }
 
 function exportExcel() {
-  const rows = reportFiltered.length > 0 ? reportFiltered : getDispatches();
+  var rows = reportFiltered.length > 0 ? reportFiltered : getDispatches();
   if (!rows.length) { showToast('No data to export', 'warn'); return; }
-
   if (typeof XLSX === 'undefined') { showToast('Excel library not loaded', 'error'); return; }
-
-  const exportRows = rows.map(dispatchToExportRow);
-  const ws = XLSX.utils.json_to_sheet(exportRows);
-  const wb = XLSX.utils.book_new();
+  var exportRows = rows.map(dispatchToExportRow);
+  var ws = XLSX.utils.json_to_sheet(exportRows);
+  var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Dispatches');
-
-  // Column widths
   ws['!cols'] = Object.keys(exportRows[0]).map(function() { return { wch: 20 }; });
-
   XLSX.writeFile(wb, 'vyoma_report_' + new Date().toISOString().slice(0,10) + '.xlsx');
   showToast('Excel file exported', 'success');
 }
@@ -998,147 +903,84 @@ function exportExcel() {
    TAB: USER ANALYTICS
 ══════════════════════════════════════════════════ */
 function loadUserAnalytics() {
-  let dispatches = getDispatches();
-  const from = document.getElementById('ua-date-from').value;
-  const to   = document.getElementById('ua-date-to').value;
-  if (from) dispatches = dispatches.filter(function(d) { return d.createdAt >= from; });
-  if (to)   dispatches = dispatches.filter(function(d) { return d.createdAt <= to + 'T23:59:59'; });
+  var dispatches = getDispatches();
+  var from = document.getElementById('ua-date-from').value;
+  var to   = document.getElementById('ua-date-to').value;
+  if (from) dispatches = dispatches.filter(function(d) { return (d.createdAt||'') >= from; });
+  if (to)   dispatches = dispatches.filter(function(d) { return (d.createdAt||'') <= to + 'T23:59:59'; });
 
-  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
   Chart.defaults.color = isDark ? '#c5cae9' : '#374151';
 
-  // Build per-user map
-  const userMap = {};
+  var userMap = {};
+  var allUsers = getUsers();
   dispatches.forEach(function(d) {
-    const uid  = d.createdBy || 'unknown';
-    const name = d.createdByName || 'Unknown';
-    if (!userMap[uid]) {
-      userMap[uid] = { name, total: 0, Draft: 0, 'In Process': 0, Dispatched: 0, Delivered: 0, Completed: 0, emailSent: 0, lastActive: null };
-    }
+    var uid  = d.createdBy || 'unknown';
+    var name = d.createdByName || 'Unknown';
+    var u    = allUsers.find(function(x){ return x.id === uid; });
+    var role = u ? u.role : '—';
+    if (!userMap[uid]) userMap[uid] = { name, role, total:0, Draft:0, 'In Process':0, Dispatched:0, Delivered:0, Completed:0, emailSent:0, lastActive:null };
     userMap[uid].total++;
     if (userMap[uid][d.status] !== undefined) userMap[uid][d.status]++;
     if (d.emailSent) userMap[uid].emailSent++;
     if (!userMap[uid].lastActive || d.updatedAt > userMap[uid].lastActive) userMap[uid].lastActive = d.updatedAt;
   });
 
-  const users = Object.values(userMap).sort(function(a,b){ return b.total - a.total; });
-
-  // Stat cards
-  const cardColors = ['#1a237e','#3949ab','#5c6bc0','#7986cb','#9fa8da'];
+  var users = Object.values(userMap).sort(function(a,b){ return b.total-a.total; });
+  var cardColors = ['#1a237e','#3949ab','#5c6bc0','#7986cb','#9fa8da'];
   document.getElementById('ua-user-cards').innerHTML = users.length === 0
     ? '<p class="text-muted small">No data yet.</p>'
-    : users.map(function(u, i) {
-        return `<div class="report-stat" style="border-top:3px solid ${cardColors[i%cardColors.length]}">
-          <div class="val">${u.total}</div>
-          <div class="lbl">${escHtml(u.name)}</div>
-          <div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px">${u.Completed} completed · ${u.emailSent} emails sent</div>
-        </div>`;
+    : users.map(function(u,i) {
+        return '<div class="report-stat" style="border-top:3px solid '+cardColors[i%cardColors.length]+'">' +
+          '<div class="val">'+u.total+'</div><div class="lbl">'+escHtml(u.name)+'</div>' +
+          '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px">'+escHtml(u.role)+' · '+u.Completed+' completed · '+u.emailSent+' emails</div></div>';
       }).join('');
 
-  // Per-user entries bar chart
   if (chartUserEntries) chartUserEntries.destroy();
-  const ctxUE = document.getElementById('chartUserEntries').getContext('2d');
-  chartUserEntries = new Chart(ctxUE, {
-    type: 'bar',
-    data: {
-      labels: users.map(function(u){ return u.name; }),
-      datasets: [{ label: 'Total Entries', data: users.map(function(u){ return u.total; }), backgroundColor: '#3949ab', borderRadius: 6 }]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: { y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: isDark ? '#2e3350' : '#e5e7eb' } }, x: { grid: { display: false } } }
-    }
+  chartUserEntries = new Chart(document.getElementById('chartUserEntries').getContext('2d'), {
+    type:'bar', data:{ labels:users.map(function(u){ return u.name; }), datasets:[{ label:'Total Entries', data:users.map(function(u){ return u.total; }), backgroundColor:'#3949ab', borderRadius:6 }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ y:{beginAtZero:true,ticks:{stepSize:1}}, x:{grid:{display:false}} } }
   });
 
-  // Status stacked bar chart per user
   if (chartUserStatus) chartUserStatus.destroy();
-  const ctxUS = document.getElementById('chartUserStatus').getContext('2d');
-  chartUserStatus = new Chart(ctxUS, {
-    type: 'bar',
-    data: {
-      labels: users.map(function(u){ return u.name; }),
-      datasets: [
-        { label: 'Draft',      data: users.map(function(u){ return u.Draft; }),         backgroundColor: '#78909c', borderRadius: 3 },
-        { label: 'In Process', data: users.map(function(u){ return u['In Process']; }), backgroundColor: '#1565c0', borderRadius: 3 },
-        { label: 'Dispatched', data: users.map(function(u){ return u.Dispatched; }),    backgroundColor: '#f9a825', borderRadius: 3 },
-        { label: 'Delivered',  data: users.map(function(u){ return u.Delivered; }),     backgroundColor: '#2e7d32', borderRadius: 3 },
-        { label: 'Completed',  data: users.map(function(u){ return u.Completed; }),     backgroundColor: '#388e3c', borderRadius: 3 },
-      ]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { position: 'bottom', labels: { font: { size: 10 } } } },
-      scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, beginAtZero: true, grid: { color: isDark ? '#2e3350' : '#e5e7eb' } } }
-    }
+  chartUserStatus = new Chart(document.getElementById('chartUserStatus').getContext('2d'), {
+    type:'bar', data:{ labels:users.map(function(u){ return u.name; }), datasets:[
+      { label:'Draft',      data:users.map(function(u){ return u.Draft; }),         backgroundColor:'#78909c', borderRadius:3 },
+      { label:'In Process', data:users.map(function(u){ return u['In Process']; }), backgroundColor:'#1565c0', borderRadius:3 },
+      { label:'Dispatched', data:users.map(function(u){ return u.Dispatched; }),    backgroundColor:'#f9a825', borderRadius:3 },
+      { label:'Delivered',  data:users.map(function(u){ return u.Delivered; }),     backgroundColor:'#2e7d32', borderRadius:3 },
+      { label:'Completed',  data:users.map(function(u){ return u.Completed; }),     backgroundColor:'#388e3c', borderRadius:3 },
+    ] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom',labels:{font:{size:10}}}}, scales:{ x:{stacked:true,grid:{display:false}}, y:{stacked:true,beginAtZero:true} } }
   });
 
-  // Name type chart
-  const ntCounts = {};
-  NAME_TYPES.forEach(function(t) { ntCounts[t] = 0; });
-  dispatches.forEach(function(d) { if (d.nameType && ntCounts[d.nameType] !== undefined) ntCounts[d.nameType]++; });
+  var ntCounts = {}; NAME_TYPES.get().forEach(function(t){ ntCounts[t]=0; });
+  dispatches.forEach(function(d){ if (d.nameType) ntCounts[d.nameType]=(ntCounts[d.nameType]||0)+1; });
   if (chartNameType) chartNameType.destroy();
-  const ctxNT = document.getElementById('chartNameType').getContext('2d');
-  chartNameType = new Chart(ctxNT, {
-    type: 'pie',
-    data: {
-      labels: Object.keys(ntCounts),
-      datasets: [{ data: Object.values(ntCounts), backgroundColor: ['#1a237e','#f9a825','#5c6bc0','#388e3c'], borderWidth: 2, borderColor: isDark ? '#1c1f2e' : '#fff' }]
-    },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } } }
+  chartNameType = new Chart(document.getElementById('chartNameType').getContext('2d'), {
+    type:'pie', data:{ labels:Object.keys(ntCounts), datasets:[{ data:Object.values(ntCounts), backgroundColor:['#1a237e','#f9a825','#5c6bc0','#388e3c'], borderWidth:2, borderColor:isDark?'#1c1f2e':'#fff' }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom',labels:{font:{size:11}}}} }
   });
 
-  // Daily entries chart (last 30 days)
-  const today = new Date();
-  const days = [];
-  for (let i = 29; i >= 0; i--) {
-    const d = new Date(today); d.setDate(d.getDate() - i);
-    days.push(d.toISOString().slice(0, 10));
-  }
-  const dayCounts = {};
-  days.forEach(function(d){ dayCounts[d] = 0; });
-  dispatches.forEach(function(d) {
-    const day = (d.createdAt || '').slice(0, 10);
-    if (dayCounts[day] !== undefined) dayCounts[day]++;
-  });
+  var today = new Date(), days = [], i, dd;
+  for (i = 29; i >= 0; i--) { dd = new Date(today); dd.setDate(dd.getDate()-i); days.push(dd.toISOString().slice(0,10)); }
+  var dayCounts = {}; days.forEach(function(d){ dayCounts[d]=0; });
+  dispatches.forEach(function(d) { var day=(d.createdAt||'').slice(0,10); if (dayCounts[day]!==undefined) dayCounts[day]++; });
   if (chartDaily) chartDaily.destroy();
-  const ctxDL = document.getElementById('chartDaily').getContext('2d');
-  chartDaily = new Chart(ctxDL, {
-    type: 'line',
-    data: {
-      labels: days.map(function(d){ return d.slice(5); }),
-      datasets: [{ label: 'Entries', data: days.map(function(d){ return dayCounts[d]; }), borderColor: '#3949ab', backgroundColor: 'rgba(57,73,171,0.1)', fill: true, tension: 0.4, pointRadius: 3 }]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: { y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: isDark ? '#2e3350' : '#e5e7eb' } }, x: { grid: { display: false }, ticks: { maxTicksLimit: 10 } } }
-    }
+  chartDaily = new Chart(document.getElementById('chartDaily').getContext('2d'), {
+    type:'line', data:{ labels:days.map(function(d){ return d.slice(5); }), datasets:[{ label:'Entries', data:days.map(function(d){ return dayCounts[d]; }), borderColor:'#3949ab', backgroundColor:'rgba(57,73,171,0.1)', fill:true, tension:0.4, pointRadius:3 }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ y:{beginAtZero:true,ticks:{stepSize:1}}, x:{grid:{display:false},ticks:{maxTicksLimit:10}} } }
   });
 
-  // Per-user table
-  const tbody = document.getElementById('ua-tbody');
-  const empty = document.getElementById('ua-empty');
-  if (users.length === 0) {
-    tbody.innerHTML = '';
-    empty.classList.remove('hidden');
-    document.getElementById('ua-table').classList.add('hidden');
-    return;
-  }
-  empty.classList.add('hidden');
-  document.getElementById('ua-table').classList.remove('hidden');
-  tbody.innerHTML = users.map(function(u, i) {
-    return `<tr data-ocid="admin.analytics.row.${i+1}">
-      <td><strong>${escHtml(u.name)}</strong></td>
-      <td><strong>${u.total}</strong></td>
-      <td>${u.Draft}</td>
-      <td>${u['In Process']}</td>
-      <td>${u.Dispatched}</td>
-      <td>${u.Delivered}</td>
-      <td>${u.Completed}</td>
-      <td>${u.emailSent}</td>
-      <td>${u.lastActive ? timeAgo(u.lastActive) : '—'}</td>
-    </tr>`;
+  var tbody = document.getElementById('ua-tbody');
+  var empty = document.getElementById('ua-empty');
+  if (!users.length) { tbody.innerHTML=''; empty.classList.remove('hidden'); document.getElementById('ua-table').classList.add('hidden'); return; }
+  empty.classList.add('hidden'); document.getElementById('ua-table').classList.remove('hidden');
+  tbody.innerHTML = users.map(function(u,i) {
+    return '<tr data-ocid="admin.analytics.row.'+(i+1)+'">' +
+      '<td><strong>'+escHtml(u.name)+'</strong></td><td><span class="badge badge-'+(u.role==='assigner'?'delivered':'inprocess')+'">'+escHtml(u.role)+'</span></td>' +
+      '<td><strong>'+u.total+'</strong></td><td>'+u.Draft+'</td><td>'+u['In Process']+'</td><td>'+u.Dispatched+'</td><td>'+u.Delivered+'</td><td>'+u.Completed+'</td>' +
+      '<td>'+u.emailSent+'</td><td>'+(u.lastActive ? timeAgo(u.lastActive) : '—')+'</td></tr>';
   }).join('');
 }
 
@@ -1149,40 +991,120 @@ function clearUAFilter() {
 }
 
 /* ══════════════════════════════════════════════════
-   EMAIL MODAL
+   TAB: SETTINGS
+══════════════════════════════════════════════════ */
+function loadSettings() {
+  var s = getSettings();
+  settingsState = {
+    websites:      (s.websites && s.websites.length) ? s.websites.slice() : DEFAULT_WEBSITES.slice(),
+    nameTypes:     (s.nameTypes && s.nameTypes.length) ? s.nameTypes.slice() : DEFAULT_NAME_TYPES.slice(),
+    dispatchTypes: (s.dispatchTypes && s.dispatchTypes.length) ? s.dispatchTypes.slice() : DEFAULT_DISPATCH_TYPES.slice(),
+    priorities:    (s.priorities && s.priorities.length) ? s.priorities.slice() : DEFAULT_PRIORITIES.slice(),
+    trackingUrls:  s.trackingUrls || {},
+  };
+  renderTagList('websites');
+  renderTagList('nameTypes');
+  renderTagList('dispatchTypes');
+  renderTagList('priorities');
+  renderTrackingUrlRows();
+}
+
+function renderTagList(key) {
+  var container = document.getElementById('tags-' + key);
+  if (!container) return;
+  container.innerHTML = settingsState[key].map(function(item) {
+    return '<span class="tag-item">' + escHtml(item) + '<button type="button" class="tag-remove" onclick="removeTag(\'' + key + '\',\'' + escHtml(item).replace(/'/g,"\\'")+'\')">✕</button></span>';
+  }).join('');
+}
+
+function addTag(key, inputId) {
+  var input = document.getElementById(inputId);
+  var val = input.value.trim();
+  if (!val) { showToast('Please enter a value', 'warn'); return; }
+  if (settingsState[key].includes(val)) { showToast('Already exists', 'warn'); return; }
+  settingsState[key].push(val);
+  input.value = '';
+  renderTagList(key);
+  if (key === 'dispatchTypes') renderTrackingUrlRows();
+  showToast('Added "' + val + '"', 'success');
+}
+
+function removeTag(key, val) {
+  settingsState[key] = settingsState[key].filter(function(x) { return x !== val; });
+  renderTagList(key);
+  if (key === 'dispatchTypes') renderTrackingUrlRows();
+}
+
+function renderTrackingUrlRows() {
+  var container = document.getElementById('tracking-url-rows');
+  if (!container) return;
+  var dtypes = settingsState.dispatchTypes;
+  var urls   = settingsState.trackingUrls || {};
+  container.innerHTML = dtypes.map(function(dtype) {
+    var safeId = dtype.replace(/[^a-zA-Z0-9]/g, '_');
+    var existing = urls[dtype] || '';
+    return '<div class="tracking-url-row">' +
+      '<label>' + escHtml(dtype) + '</label>' +
+      '<input type="url" class="form-control tracking-url-input" id="turl-' + safeId + '" data-dtype="' + escHtml(dtype) + '" placeholder="https://..." value="' + escHtml(existing) + '" data-ocid="admin.settings.turl_' + safeId + '.input" />' +
+      '</div>';
+  }).join('');
+}
+
+function saveTrackingUrls() {
+  var urls = {};
+  document.querySelectorAll('.tracking-url-input').forEach(function(input) {
+    var val = input.value.trim();
+    if (val) urls[input.dataset.dtype] = val;
+  });
+  settingsState.trackingUrls = urls;
+  var s = getSettings();
+  s.trackingUrls = urls;
+  saveSettings(s);
+  showToast('Tracking URLs saved', 'success');
+}
+
+function saveAllSettings() {
+  saveTrackingUrls();
+  var s = getSettings();
+  s.websites      = settingsState.websites;
+  s.nameTypes     = settingsState.nameTypes;
+  s.dispatchTypes = settingsState.dispatchTypes;
+  s.priorities    = settingsState.priorities;
+  saveSettings(s);
+  showToast('All settings saved successfully', 'success');
+}
+
+/* ══════════════════════════════════════════════════
+   EMAIL / WHATSAPP MODAL
 ══════════════════════════════════════════════════ */
 function openEmailModalForEntry(id) {
-  const entry = getDispatches().find(function(d) { return d.id === id; });
+  var entry = getDispatches().find(function(d) { return d.id === id; });
   if (!entry) return;
   currentEmailEntryId = id;
-
   document.getElementById('em-to').value      = entry.customerEmail || '';
+  document.getElementById('em-phone').value   = entry.customerPhone || '';
   document.getElementById('em-subject').value = buildEmailSubject(entry);
   document.getElementById('em-body').value    = buildEmailBody(entry);
   document.getElementById('email-modal-overlay').classList.add('open');
 }
-function closeEmailModal() {
-  document.getElementById('email-modal-overlay').classList.remove('open');
-  currentEmailEntryId = null;
-}
+function closeEmailModal() { document.getElementById('email-modal-overlay').classList.remove('open'); currentEmailEntryId = null; }
 function copyEmailToClipboard() {
-  const body = document.getElementById('em-body').value;
-  const subject = document.getElementById('em-subject').value;
-  const text = 'Subject: ' + subject + '\n\n' + body;
-  navigator.clipboard.writeText(text).then(function() {
-    showToast('Copied to clipboard', 'success');
-  }).catch(function() { showToast('Copy failed — please select and copy manually', 'warn'); });
+  var text = 'Subject: ' + document.getElementById('em-subject').value + '\n\n' + document.getElementById('em-body').value;
+  navigator.clipboard.writeText(text).then(function() { showToast('Copied to clipboard', 'success'); }).catch(function() { showToast('Copy failed — select manually', 'warn'); });
 }
 function openInGmail() {
-  const to      = encodeURIComponent(document.getElementById('em-to').value);
-  const subject = encodeURIComponent(document.getElementById('em-subject').value);
-  const body    = encodeURIComponent(document.getElementById('em-body').value);
-  window.open('https://mail.google.com/mail/?view=cm&to=' + to + '&su=' + subject + '&body=' + body, '_blank');
+  window.open('https://mail.google.com/mail/?view=cm&to=' + encodeURIComponent(document.getElementById('em-to').value) + '&su=' + encodeURIComponent(document.getElementById('em-subject').value) + '&body=' + encodeURIComponent(document.getElementById('em-body').value), '_blank');
+}
+function openWhatsAppAdmin() {
+  var phone = (document.getElementById('em-phone').value || '').replace(/\D/g,'');
+  var msg   = encodeURIComponent(document.getElementById('em-body').value);
+  var url   = phone ? 'https://wa.me/' + phone + '?text=' + msg : 'https://wa.me/?text=' + msg;
+  window.open(url, '_blank');
 }
 function markEmailSent() {
   if (currentEmailEntryId) {
     updateDispatch(currentEmailEntryId, { emailSent: true, emailSentAt: new Date().toISOString() });
-    showToast('Email marked as sent', 'success');
+    showToast('Marked as sent', 'success');
   }
   closeEmailModal();
   filterDispatches();

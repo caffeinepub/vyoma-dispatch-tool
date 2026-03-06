@@ -3,8 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Dispatcher Dashboard — Vyoma Dispatch Tool</title>
+  <title>Dashboard — Vyoma Dispatch Tool</title>
   <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
     body { background: var(--bg); }
     .dash-main { padding: 24px; flex: 1; }
@@ -13,22 +14,20 @@
       .print-area { display: block; }
       body > *:not(.print-area) { display: none; }
     }
-    .product-row {
-      display: flex; align-items: center; gap: 8px;
-    }
-    .product-row input[type="text"] {
-      flex: 1; min-width: 0;
-    }
-    .qty-wrap {
-      display: flex; align-items: center; gap: 4px; flex-shrink: 0;
-    }
-    .qty-wrap button {
-      width: 28px; height: 28px; padding: 0; line-height: 1;
-      font-size: 1rem; font-weight: 700; border-radius: 4px;
-    }
-    .qty-wrap input[type="number"] {
-      width: 52px; text-align: center; padding: 4px;
-    }
+    .product-row { display:flex; align-items:center; gap:8px; }
+    .product-row input[type="text"] { flex:1; min-width:0; }
+    .qty-wrap { display:flex; align-items:center; gap:4px; flex-shrink:0; }
+    .qty-wrap button { width:28px; height:28px; padding:0; line-height:1; font-size:1rem; font-weight:700; border-radius:4px; }
+    .qty-wrap input[type="number"] { width:52px; text-align:center; padding:4px; }
+    .priority-badge { display:inline-block; padding:2px 8px; border-radius:20px; font-size:0.7rem; font-weight:600; color:#fff; }
+    .assigned-banner { background:linear-gradient(135deg,#1565c0,#3949ab); color:#fff; border-radius:var(--radius-sm); padding:10px 18px; margin-bottom:16px; font-size:0.88rem; display:flex; align-items:center; gap:10px; }
+    .tab-bar { display:flex; gap:0; margin-bottom:20px; border-bottom:2px solid var(--border); }
+    .tab-btn { padding:10px 22px; background:none; border:none; cursor:pointer; font-size:0.9rem; font-weight:500; color:var(--text-muted); border-bottom:3px solid transparent; margin-bottom:-2px; transition:all 0.2s; }
+    .tab-btn.active { color:var(--primary); border-bottom-color:var(--primary); }
+    .tab-btn:hover:not(.active) { color:var(--text); }
+    .bulk-import-area { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .logo-img-header { max-height:40px; width:auto; }
+    #tracking-field-wrap label .required { color:var(--danger); }
   </style>
 </head>
 <body>
@@ -36,8 +35,11 @@
 <!-- HEADER -->
 <header class="dash-header">
   <div class="header-brand">
-    <div class="brand-name">Vyoma Linguistic Labs Foundation</div>
-    <div class="brand-sub">Dispatch Tool — Data Entry</div>
+    <img src="assets/uploads/Vyoma_Logo_Blue_500x243-1--1.jpg" alt="Vyoma Logo" class="logo-img-header" onerror="this.style.display='none'" />
+    <div>
+      <div class="brand-name">Vyoma Linguistic Labs Foundation</div>
+      <div class="brand-sub" id="header-sub">Dispatch Tool</div>
+    </div>
   </div>
   <button type="button" class="dark-toggle" onclick="toggleDarkMode()" title="Toggle dark mode" data-ocid="dash.dark.toggle">🌙</button>
   <div class="header-user">
@@ -51,58 +53,105 @@
 </header>
 
 <!-- MAIN -->
-<main class="dash-main">
-  <!-- Page header -->
-  <div class="page-header">
-    <h2>My Dispatch Entries</h2>
-    <button type="button" class="btn btn-accent" onclick="openEntryModal()" data-ocid="dash.add.open_modal_button" style="font-size:0.95rem;padding:10px 20px">+ Add New Entry</button>
+<main class="dash-main" id="dash-main">
+
+  <!-- ASSIGNER VIEW -->
+  <div id="assigner-view">
+    <div class="page-header">
+      <h2>Task Assignment</h2>
+      <div class="d-flex gap-8 align-center" style="flex-wrap:wrap">
+        <button type="button" class="btn btn-accent" onclick="openEntryModal()" data-ocid="dash.assigner.assign.open_modal_button" style="font-size:0.95rem;padding:10px 20px">+ Assign New Task</button>
+        <button type="button" class="btn btn-outline" onclick="downloadBulkTemplate()" data-ocid="dash.assigner.bulk_template.button">⬇ Download Excel Template</button>
+        <label class="btn btn-outline" style="cursor:pointer;margin:0" data-ocid="dash.assigner.bulk_upload.upload_button">
+          📤 Bulk Import
+          <input type="file" id="bulk-upload-input" accept=".xlsx,.xls" style="display:none" onchange="handleBulkUpload(this)" />
+        </label>
+      </div>
+    </div>
+    <div class="stat-grid mb-20" id="my-stats"></div>
+    <div class="filters-bar">
+      <input type="text" class="form-control search-input" id="a-search" placeholder="Search by name, order ID…" oninput="filterAssignerTasks()" data-ocid="dash.assigner.search.input" />
+      <select class="form-control" id="a-filter-status" onchange="filterAssignerTasks()" data-ocid="dash.assigner.filter_status.select"><option value="">All Statuses</option></select>
+      <select class="form-control" id="a-filter-dispatcher" onchange="filterAssignerTasks()" data-ocid="dash.assigner.filter_dispatcher.select"><option value="">All Dispatchers</option></select>
+      <select class="form-control" id="a-filter-priority" onchange="filterAssignerTasks()" data-ocid="dash.assigner.filter_priority.select"><option value="">All Priorities</option></select>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="clearAssignerFilters()" data-ocid="dash.assigner.filter_clear.button">Clear</button>
+    </div>
+    <div class="table-wrap" id="assigner-table-wrap">
+      <table class="data-table" id="assigner-table">
+        <thead>
+          <tr><th>Sl</th><th>Customer</th><th>Order ID</th><th>Dispatch Type</th><th>Priority</th><th>Assigned To</th><th>Status</th><th>Date</th><th>Actions</th></tr>
+        </thead>
+        <tbody id="assigner-tbody"></tbody>
+      </table>
+    </div>
+    <div id="assigner-empty" class="empty-state hidden">
+      <div class="empty-icon">📋</div>
+      <h3>No tasks assigned yet</h3>
+      <p>Click "Assign New Task" or use Bulk Import to get started.</p>
+    </div>
   </div>
 
-  <!-- Stats -->
-  <div class="stat-grid mb-20" id="my-stats"></div>
+  <!-- DISPATCHER VIEW -->
+  <div id="dispatcher-view" class="hidden">
+    <div class="page-header">
+      <h2>My Dispatch Entries</h2>
+      <button type="button" class="btn btn-accent" onclick="openEntryModal()" data-ocid="dash.add.open_modal_button" style="font-size:0.95rem;padding:10px 20px">+ Add New Entry</button>
+    </div>
+    <div class="stat-grid mb-20" id="dispatcher-stats"></div>
 
-  <!-- Search + filter bar -->
-  <div class="filters-bar">
-    <input type="text" class="form-control search-input" id="search-input" placeholder="Search by name, order ID, tracking…" oninput="filterEntries()" data-ocid="dash.search.input" />
-    <select class="form-control" id="filter-status" onchange="filterEntries()" data-ocid="dash.filter_status.select">
-      <option value="">All Statuses</option>
-    </select>
-    <select class="form-control" id="filter-website" onchange="filterEntries()" data-ocid="dash.filter_website.select">
-      <option value="">All Websites</option>
-    </select>
-    <button type="button" class="btn btn-ghost btn-sm" onclick="clearFilters()" data-ocid="dash.filter_clear.button">Clear</button>
-  </div>
+    <div class="tab-bar">
+      <button type="button" class="tab-btn active" id="tab-my" onclick="switchDispatcherTab('my')" data-ocid="dash.dispatcher.my.tab">My Entries <span id="my-count-badge" class="nav-badge" style="position:static;margin-left:6px">0</span></button>
+      <button type="button" class="tab-btn" id="tab-assigned" onclick="switchDispatcherTab('assigned')" data-ocid="dash.dispatcher.assigned.tab">Assigned to Me <span id="assigned-count-badge" class="nav-badge" style="position:static;margin-left:6px;background:var(--accent)">0</span></button>
+    </div>
 
-  <!-- Table -->
-  <div class="table-wrap" id="entries-table-wrap">
-    <table class="data-table" id="entries-table">
-      <thead>
-        <tr>
-          <th>Sl</th>
-          <th>Customer Name</th>
-          <th>Order ID</th>
-          <th>Website</th>
-          <th>Name Type</th>
-          <th>Dispatch Type</th>
-          <th>Tracking No</th>
-          <th>Status</th>
-          <th>Date</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody id="entries-tbody"></tbody>
-    </table>
-  </div>
-  <div id="entries-empty" class="empty-state hidden">
-    <div class="empty-icon">📭</div>
-    <h3>No entries yet</h3>
-    <p>Click "Add New Entry" to create your first dispatch record.</p>
-    <button type="button" class="btn btn-primary mt-16" onclick="openEntryModal()" data-ocid="dash.empty.add.button">+ Add New Entry</button>
+    <!-- My Entries panel -->
+    <div id="panel-my">
+      <div class="filters-bar">
+        <input type="text" class="form-control search-input" id="search-input" placeholder="Search by name, order ID, tracking…" oninput="filterEntries()" data-ocid="dash.search.input" />
+        <select class="form-control" id="filter-status" onchange="filterEntries()" data-ocid="dash.filter_status.select"><option value="">All Statuses</option></select>
+        <select class="form-control" id="filter-website" onchange="filterEntries()" data-ocid="dash.filter_website.select"><option value="">All Websites</option></select>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="clearFilters()" data-ocid="dash.filter_clear.button">Clear</button>
+      </div>
+      <div class="table-wrap" id="entries-table-wrap">
+        <table class="data-table" id="entries-table">
+          <thead>
+            <tr><th>Sl</th><th>Customer Name</th><th>Order ID</th><th>Website</th><th>Dispatch Type</th><th>Tracking No</th><th>Priority</th><th>Status</th><th>Date</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="entries-tbody"></tbody>
+        </table>
+      </div>
+      <div id="entries-empty" class="empty-state hidden">
+        <div class="empty-icon">📭</div>
+        <h3>No entries yet</h3>
+        <p>Click "Add New Entry" to create your first dispatch record.</p>
+        <button type="button" class="btn btn-primary mt-16" onclick="openEntryModal()" data-ocid="dash.empty.add.button">+ Add New Entry</button>
+      </div>
+    </div>
+
+    <!-- Assigned to Me panel -->
+    <div id="panel-assigned" class="hidden">
+      <div id="assigned-banner" class="assigned-banner hidden">
+        📥 You have <strong id="assigned-count-text">0</strong> task(s) assigned to you. Complete them in order of priority.
+      </div>
+      <div class="table-wrap" id="assigned-table-wrap">
+        <table class="data-table" id="assigned-table">
+          <thead>
+            <tr><th>Sl</th><th>Customer</th><th>Order ID</th><th>Website</th><th>Dispatch Type</th><th>Tracking No</th><th>Priority</th><th>Assigned By</th><th>Status</th><th>Date</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="assigned-tbody"></tbody>
+        </table>
+      </div>
+      <div id="assigned-empty" class="empty-state hidden">
+        <div class="empty-icon">📬</div>
+        <h3>No tasks assigned to you yet</h3>
+        <p>Tasks assigned by an Assigner will appear here.</p>
+      </div>
+    </div>
   </div>
 
 </main>
 
-<!-- ══════════════ MODAL: ADD/EDIT ENTRY ══════════════ -->
+<!-- ══════════════ MODAL: ADD/EDIT / ASSIGN ENTRY ══════════════ -->
 <div class="modal-overlay" id="entry-modal-overlay" data-ocid="dash.entry.modal">
   <div class="modal modal-lg">
     <div class="modal-header">
@@ -112,6 +161,23 @@
     <div class="modal-body">
       <form id="entry-form" novalidate>
         <input type="hidden" id="entry-id" />
+
+        <!-- Priority + Dispatcher (assigner sees dispatcher selector) -->
+        <div class="form-row">
+          <div class="form-group">
+            <label for="e-priority">Priority <span class="required">*</span></label>
+            <select id="e-priority" class="form-control" data-ocid="dash.entry.priority.select">
+              <option value="">Select priority</option>
+            </select>
+          </div>
+          <div class="form-group" id="assign-dispatcher-group" style="display:none">
+            <label for="e-assign-dispatcher">Assign to Dispatcher <span class="required">*</span></label>
+            <select id="e-assign-dispatcher" class="form-control" data-ocid="dash.entry.assign_dispatcher.select">
+              <option value="">Select dispatcher</option>
+            </select>
+            <div class="form-error" id="e-dispatcher-err"></div>
+          </div>
+        </div>
 
         <div class="form-row">
           <div class="form-group">
@@ -134,12 +200,25 @@
         <div class="form-row">
           <div class="form-group">
             <label for="e-orderid">Order ID <span class="required">*</span></label>
-            <input type="text" id="e-orderid" class="form-control" placeholder="e.g. ORD-2025-001" data-ocid="dash.entry.orderid.input" />
+            <input type="text" id="e-orderid" class="form-control" placeholder="e.g. ORD-2026-001" data-ocid="dash.entry.orderid.input" />
             <div class="form-error" id="e-orderid-err"></div>
           </div>
           <div class="form-group">
             <label for="e-email">Customer Email</label>
             <input type="email" id="e-email" class="form-control" placeholder="customer@email.com" data-ocid="dash.entry.email.input" />
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="e-phone">Customer Phone (WhatsApp)</label>
+            <input type="text" id="e-phone" class="form-control" placeholder="e.g. 919876543210" data-ocid="dash.entry.phone.input" />
+          </div>
+          <div class="form-group">
+            <label for="e-nametype">Name Type</label>
+            <select id="e-nametype" class="form-control" data-ocid="dash.entry.nametype.select">
+              <option value="">Select name type</option>
+            </select>
           </div>
         </div>
 
@@ -152,28 +231,24 @@
             <div class="form-error" id="e-website-err"></div>
           </div>
           <div class="form-group">
-            <label for="e-nametype">Name Type</label>
-            <select id="e-nametype" class="form-control" data-ocid="dash.entry.nametype.select">
-              <option value="">Select name type</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group">
             <label for="e-dtype">Dispatch Type <span class="required">*</span></label>
-            <select id="e-dtype" class="form-control" data-ocid="dash.entry.dtype.select">
+            <select id="e-dtype" class="form-control" onchange="onDispatchTypeChange()" data-ocid="dash.entry.dtype.select">
               <option value="">Select type</option>
             </select>
             <div class="form-error" id="e-dtype-err"></div>
           </div>
-          <div class="form-group">
-            <label for="e-tracking">Tracking Number</label>
+        </div>
+
+        <!-- Tracking field — hidden for PostCard/Gift -->
+        <div class="form-row" id="tracking-field-wrap">
+          <div class="form-group" style="flex:1">
+            <label for="e-tracking">Tracking Number <span class="required" id="tracking-required-star">*</span></label>
             <input type="text" id="e-tracking" class="form-control" placeholder="e.g. IN123456789" data-ocid="dash.entry.tracking.input" />
+            <div class="form-error" id="e-tracking-err"></div>
           </div>
         </div>
 
-        <!-- Product Purchased -->
+        <!-- Products -->
         <div class="form-group">
           <label>Product Purchased</label>
           <div id="products-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px"></div>
@@ -188,17 +263,17 @@
     </div>
     <div class="modal-footer">
       <button type="button" class="btn btn-ghost" onclick="closeEntryModal()" data-ocid="dash.entry.modal.cancel_button">Cancel</button>
-      <button type="button" class="btn btn-outline" onclick="saveEntry('Draft')" data-ocid="dash.entry.modal.draft_button">💾 Save Draft</button>
-      <button type="button" class="btn btn-primary" onclick="saveEntry('In Process')" data-ocid="dash.entry.modal.save_button">✅ Save Entry</button>
+      <button type="button" class="btn btn-outline" onclick="saveEntry('Draft')" data-ocid="dash.entry.modal.draft_button" id="btn-save-draft">💾 Save Draft</button>
+      <button type="button" class="btn btn-primary" onclick="saveEntry('In Process')" data-ocid="dash.entry.modal.save_button">✅ Save &amp; Assign</button>
     </div>
   </div>
 </div>
 
-<!-- ══════════════ MODAL: EMAIL ══════════════ -->
+<!-- ══════════════ MODAL: EMAIL / WHATSAPP ══════════════ -->
 <div class="modal-overlay" id="email-modal-overlay" data-ocid="dash.email.modal">
   <div class="modal modal-lg">
     <div class="modal-header">
-      <h3>📧 Send Email Notification</h3>
+      <h3>📧 Send Notification</h3>
       <button type="button" class="modal-close" onclick="closeEmailModal()" data-ocid="dash.email.modal.close_button">✕</button>
     </div>
     <div class="modal-body">
@@ -207,17 +282,22 @@
         <input type="email" id="em-to" class="form-control" placeholder="customer@email.com" data-ocid="dash.email.to.input" />
       </div>
       <div class="form-group">
+        <label for="em-phone">Customer Phone (WhatsApp)</label>
+        <input type="text" id="em-phone" class="form-control" placeholder="e.g. 919876543210 (with country code)" data-ocid="dash.email.phone.input" />
+      </div>
+      <div class="form-group">
         <label for="em-subject">Subject</label>
         <input type="text" id="em-subject" class="form-control" data-ocid="dash.email.subject.input" />
       </div>
       <div class="form-group">
-        <label for="em-body">Email Body</label>
+        <label for="em-body">Message Body</label>
         <textarea id="em-body" class="form-control" rows="13" style="font-family:monospace;font-size:0.85rem" data-ocid="dash.email.body.textarea"></textarea>
       </div>
     </div>
     <div class="modal-footer">
       <button type="button" class="btn btn-ghost" onclick="copyEmailBody()" data-ocid="dash.email.copy.button">📋 Copy</button>
-      <button type="button" class="btn btn-outline" onclick="openGmail()" data-ocid="dash.email.gmail.button">✉️ Open in Gmail</button>
+      <button type="button" class="btn btn-outline" onclick="openGmail()" data-ocid="dash.email.gmail.button">✉️ Gmail</button>
+      <button type="button" class="btn btn-outline" onclick="openWhatsApp()" data-ocid="dash.email.whatsapp.button" style="background:#25d366;color:#fff;border-color:#25d366">💬 WhatsApp</button>
       <button type="button" class="btn btn-primary" onclick="markSent()" data-ocid="dash.email.sent.button">✅ Mark as Sent</button>
       <button type="button" class="btn btn-ghost" onclick="closeEmailModal()" data-ocid="dash.email.modal.cancel_button">Close</button>
     </div>
@@ -230,11 +310,13 @@
 <div id="toast-container"></div>
 <script src="app.js"></script>
 <script>
-/* ── Init ─────────────────────────────────────────────────── */
-let SESSION = null;
-let currentEmailEntryId = null;
-let editingEntryId = null;
+/* ── State ────────────────────────────────────────────────── */
+var SESSION = null;
+var currentEmailEntryId = null;
+var editingEntryId = null;
+var currentDispatcherTab = 'my';
 
+/* ── Init ─────────────────────────────────────────────────── */
 (function init() {
   SESSION = checkSession('user');
   if (!SESSION) return;
@@ -244,151 +326,311 @@ let editingEntryId = null;
   document.getElementById('user-role-label').textContent = SESSION.role.charAt(0).toUpperCase() + SESSION.role.slice(1);
   updateDarkToggle();
 
-  // Populate selects
-  const websiteSel = document.getElementById('e-website');
-  WEBSITES.forEach(function(w) {
-    const opt = document.createElement('option'); opt.value = w; opt.textContent = w;
-    websiteSel.appendChild(opt);
-  });
-  const nameTypeSel = document.getElementById('e-nametype');
-  NAME_TYPES.forEach(function(t) {
-    const opt = document.createElement('option'); opt.value = t; opt.textContent = t;
-    nameTypeSel.appendChild(opt);
-  });
-  const dtypeSel = document.getElementById('e-dtype');
-  DISPATCH_TYPES.forEach(function(t) {
-    const opt = document.createElement('option'); opt.value = t; opt.textContent = t;
-    dtypeSel.appendChild(opt);
-  });
-  const statusSel = document.getElementById('filter-status');
-  STATUSES.forEach(function(s) {
-    const opt = document.createElement('option'); opt.value = s; opt.textContent = s;
-    statusSel.appendChild(opt);
-  });
-  const websiteFilterSel = document.getElementById('filter-website');
-  WEBSITES.forEach(function(w) {
-    const opt = document.createElement('option'); opt.value = w; opt.textContent = w;
-    websiteFilterSel.appendChild(opt);
-  });
+  populateFormDropdowns();
 
-  loadStats();
-  filterEntries();
+  if (SESSION.role === 'assigner') {
+    setupAssignerView();
+  } else {
+    setupDispatcherView();
+  }
 })();
 
-/* ── Stats ────────────────────────────────────────────────── */
-function loadStats() {
-  const myDispatches = getDispatches().filter(function(d) { return d.createdBy === SESSION.userId; });
-  const counts = { total: myDispatches.length, 'In Process': 0, 'Dispatched': 0, 'Delivered': 0, 'Completed': 0 };
-  myDispatches.forEach(function(d) { if (counts[d.status] !== undefined) counts[d.status]++; });
+/* ── Populate form dropdowns ──────────────────────────────── */
+function populateFormDropdowns() {
+  var websiteSel = document.getElementById('e-website');
+  WEBSITES.get().forEach(function(w) { var o=document.createElement('option'); o.value=w; o.textContent=w; websiteSel.appendChild(o); });
 
-  document.getElementById('my-stats').innerHTML = `
-    <div class="stat-card stat-total">
-      <div class="stat-icon">📦</div>
-      <div class="stat-info"><h3>${counts.total}</h3><p>My Total</p></div>
-    </div>
-    <div class="stat-card stat-process">
-      <div class="stat-icon">🔄</div>
-      <div class="stat-info"><h3>${counts['In Process']}</h3><p>In Process</p></div>
-    </div>
-    <div class="stat-card stat-dispatch">
-      <div class="stat-icon">🚚</div>
-      <div class="stat-info"><h3>${counts['Dispatched']}</h3><p>Dispatched</p></div>
-    </div>
-    <div class="stat-card stat-delivered">
-      <div class="stat-icon">✅</div>
-      <div class="stat-info"><h3>${counts['Delivered']}</h3><p>Delivered</p></div>
-    </div>
-    <div class="stat-card stat-complete">
-      <div class="stat-icon">🏆</div>
-      <div class="stat-info"><h3>${counts['Completed']}</h3><p>Completed</p></div>
-    </div>`;
+  var ntSel = document.getElementById('e-nametype');
+  NAME_TYPES.get().forEach(function(t) { var o=document.createElement('option'); o.value=t; o.textContent=t; ntSel.appendChild(o); });
+
+  var dtSel = document.getElementById('e-dtype');
+  DISPATCH_TYPES.get().forEach(function(t) { var o=document.createElement('option'); o.value=t; o.textContent=t; dtSel.appendChild(o); });
+
+  var prioSel = document.getElementById('e-priority');
+  PRIORITIES.get().forEach(function(p) { var o=document.createElement('option'); o.value=p; o.textContent=p; prioSel.appendChild(o); });
 }
 
-/* ── Filter & Render Table ────────────────────────────────── */
-function filterEntries() {
-  let dispatches = getDispatches().filter(function(d) { return d.createdBy === SESSION.userId; });
-  const search  = (document.getElementById('search-input').value || '').toLowerCase();
-  const status  = document.getElementById('filter-status').value;
-  const website = document.getElementById('filter-website').value;
+/* ── Dispatch type tracking rule ──────────────────────────── */
+function onDispatchTypeChange() {
+  var dtype = document.getElementById('e-dtype').value;
+  var noTracking = NO_TRACKING_TYPES.includes(dtype);
+  var wrap = document.getElementById('tracking-field-wrap');
+  var star = document.getElementById('tracking-required-star');
+  if (noTracking) {
+    wrap.style.display = 'none';
+  } else {
+    wrap.style.display = '';
+    if (star) star.style.display = '';
+  }
+}
 
-  if (search) dispatches = dispatches.filter(function(d) {
-    return (d.customerName||'').toLowerCase().includes(search) ||
-           (d.orderId||'').toLowerCase().includes(search) ||
-           (d.trackingNo||'').toLowerCase().includes(search);
+/* ══════════════════════════════════════════════════
+   ASSIGNER VIEW
+══════════════════════════════════════════════════ */
+function setupAssignerView() {
+  document.getElementById('assigner-view').classList.remove('hidden');
+  document.getElementById('dispatcher-view').classList.add('hidden');
+  document.getElementById('header-sub').textContent = 'Dispatch Tool — Assigner';
+  document.getElementById('assign-dispatcher-group').style.display = '';
+  document.getElementById('btn-save-draft').style.display = 'none';
+
+  // Populate dispatcher filter and select
+  var dispatchers = getUsers().filter(function(u) { return u.role === 'dispatcher' && u.status === 'active'; });
+  var dSel = document.getElementById('e-assign-dispatcher');
+  dispatchers.forEach(function(u) { var o=document.createElement('option'); o.value=u.id; o.textContent=u.name; dSel.appendChild(o); });
+
+  var filterSel = document.getElementById('a-filter-dispatcher');
+  dispatchers.forEach(function(u) { var o=document.createElement('option'); o.value=u.id; o.textContent=u.name; filterSel.appendChild(o); });
+
+  var statusSel = document.getElementById('a-filter-status');
+  STATUSES.forEach(function(s) { var o=document.createElement('option'); o.value=s; o.textContent=s; statusSel.appendChild(o); });
+
+  var prioSel = document.getElementById('a-filter-priority');
+  PRIORITIES.get().forEach(function(p) { var o=document.createElement('option'); o.value=p; o.textContent=p; prioSel.appendChild(o); });
+
+  loadAssignerStats();
+  filterAssignerTasks();
+}
+
+function loadAssignerStats() {
+  var tasks = getDispatches().filter(function(d) { return d.assignedBy === SESSION.userId || d.createdBy === SESSION.userId; });
+  var counts = { total: tasks.length, 'In Process': 0, Dispatched: 0, Completed: 0 };
+  tasks.forEach(function(d) { if (counts[d.status] !== undefined) counts[d.status]++; });
+  document.getElementById('my-stats').innerHTML =
+    '<div class="stat-card stat-total"><div class="stat-icon">📋</div><div class="stat-info"><h3>'+counts.total+'</h3><p>Tasks Assigned</p></div></div>' +
+    '<div class="stat-card stat-process"><div class="stat-icon">🔄</div><div class="stat-info"><h3>'+counts['In Process']+'</h3><p>In Process</p></div></div>' +
+    '<div class="stat-card stat-dispatch"><div class="stat-icon">🚚</div><div class="stat-info"><h3>'+counts.Dispatched+'</h3><p>Dispatched</p></div></div>' +
+    '<div class="stat-card stat-complete"><div class="stat-icon">🏆</div><div class="stat-info"><h3>'+counts.Completed+'</h3><p>Completed</p></div></div>';
+}
+
+function filterAssignerTasks() {
+  var tasks = getDispatches().filter(function(d) { return d.assignedBy === SESSION.userId || d.createdBy === SESSION.userId; });
+  var search     = (document.getElementById('a-search').value || '').toLowerCase();
+  var status     = document.getElementById('a-filter-status').value;
+  var dispatcher = document.getElementById('a-filter-dispatcher').value;
+  var priority   = document.getElementById('a-filter-priority').value;
+
+  if (search)     tasks = tasks.filter(function(d) { return (d.customerName||'').toLowerCase().includes(search)||(d.orderId||'').toLowerCase().includes(search); });
+  if (status)     tasks = tasks.filter(function(d) { return d.status === status; });
+  if (dispatcher) tasks = tasks.filter(function(d) { return d.assignedTo === dispatcher; });
+  if (priority)   tasks = tasks.filter(function(d) { return (d.priority||'Normal') === priority; });
+
+  tasks.sort(function(a,b) { return new Date(b.createdAt) - new Date(a.createdAt); });
+  renderAssignerTable(tasks);
+}
+
+function renderAssignerTable(tasks) {
+  var tbody = document.getElementById('assigner-tbody');
+  var empty = document.getElementById('assigner-empty');
+  var wrap  = document.getElementById('assigner-table-wrap');
+
+  if (!tasks.length) {
+    tbody.innerHTML = ''; empty.classList.remove('hidden'); wrap.classList.add('hidden'); return;
+  }
+  empty.classList.add('hidden'); wrap.classList.remove('hidden');
+
+  var pColor;
+  tbody.innerHTML = tasks.map(function(d, i) {
+    pColor = PRIORITY_COLORS[d.priority||'Normal'] || '#555';
+    return '<tr id="arow-'+d.id+'" data-ocid="dash.assigner.row.'+(i+1)+'">' +
+      '<td>'+escHtml(String(d.slNo))+'</td>' +
+      '<td><strong>'+escHtml(d.customerName)+'</strong><br><span class="small text-muted">'+escHtml(d.customerEmail||d.customerPhone||'')+'</span></td>' +
+      '<td><strong>'+escHtml(d.orderId)+'</strong></td>' +
+      '<td>'+escHtml(d.dispatchType)+'</td>' +
+      '<td><span class="priority-badge" style="background:'+pColor+'">'+escHtml(d.priority||'Normal')+'</span></td>' +
+      '<td>'+(d.assignedToName ? '<span class="badge badge-inprocess">'+escHtml(d.assignedToName)+'</span>' : '<span class="text-muted">Unassigned</span>')+'</td>' +
+      '<td><span class="badge '+statusBadgeClass(d.status)+'">'+d.status+'</span></td>' +
+      '<td>'+formatDate(d.createdAt)+'<br><span class="small text-muted">'+timeAgo(d.updatedAt)+'</span></td>' +
+      '<td class="actions"><div class="table-actions">' +
+        '<button type="button" class="btn btn-ghost btn-sm" onclick="openEmailModal(\''+d.id+'\')" data-ocid="dash.assigner.email_button.'+(i+1)+'" title="'+(d.emailSent?'Sent':'Notify')+'">📧'+(d.emailSent?'✓':'')+'</button>' +
+        (d.status !== 'Completed' ? '<button type="button" class="btn btn-ghost btn-sm" onclick="editEntry(\''+d.id+'\')" data-ocid="dash.assigner.edit_button.'+(i+1)+'">✏️</button>' : '') +
+        (d.status !== 'Completed' ? '<button type="button" class="btn btn-danger btn-sm" onclick="deleteEntry(\''+d.id+'\')" data-ocid="dash.assigner.delete_button.'+(i+1)+'">🗑</button>' : '') +
+      '</div></td></tr>';
+  }).join('');
+}
+
+function clearAssignerFilters() {
+  ['a-search','a-filter-status','a-filter-dispatcher','a-filter-priority'].forEach(function(id) { var el=document.getElementById(id); if(el) el.value=''; });
+  filterAssignerTasks();
+}
+
+function handleBulkUpload(input) {
+  var file = input.files[0];
+  if (!file) return;
+  var assignedToId   = '';
+  var assignedToName = '';
+  // Use a simple prompt-style approach via confirm
+  // Ask dispatcher selection from current dispatcher list
+  var dispatchers = getUsers().filter(function(u) { return u.role === 'dispatcher' && u.status === 'active'; });
+  var names, choice, idx;
+  if (dispatchers.length > 0) {
+    names = dispatchers.map(function(u, i) { return (i+1) + '. ' + u.name; }).join('\n');
+    choice = window.prompt('Assign all imported tasks to which dispatcher?\nEnter the number:\n' + names);
+    if (choice !== null) {
+      idx = parseInt(choice) - 1;
+      if (idx >= 0 && idx < dispatchers.length) {
+        assignedToId   = dispatchers[idx].id;
+        assignedToName = dispatchers[idx].name;
+      }
+    }
+  }
+  parseBulkImportFile(file, assignedToId, assignedToName, SESSION, function(count) {
+    if (count > 0) { loadAssignerStats(); filterAssignerTasks(); }
+    input.value = '';
   });
+}
+
+/* ══════════════════════════════════════════════════
+   DISPATCHER VIEW
+══════════════════════════════════════════════════ */
+function setupDispatcherView() {
+  document.getElementById('dispatcher-view').classList.remove('hidden');
+  document.getElementById('assigner-view').classList.add('hidden');
+  document.getElementById('header-sub').textContent = 'Dispatch Tool — Data Entry';
+  document.getElementById('assign-dispatcher-group').style.display = 'none';
+
+  var statusSel = document.getElementById('filter-status');
+  STATUSES.forEach(function(s) { var o=document.createElement('option'); o.value=s; o.textContent=s; statusSel.appendChild(o); });
+  var websiteSel = document.getElementById('filter-website');
+  WEBSITES.get().forEach(function(w) { var o=document.createElement('option'); o.value=w; o.textContent=w; websiteSel.appendChild(o); });
+
+  loadDispatcherStats();
+  filterEntries();
+  filterAssignedTasks();
+}
+
+function loadDispatcherStats() {
+  var all  = getDispatches().filter(function(d) { return d.createdBy === SESSION.userId; });
+  var asgn = getDispatches().filter(function(d) { return d.assignedTo === SESSION.userId; });
+  var counts = { total: all.length, 'In Process': 0, Dispatched: 0, Completed: 0 };
+  all.forEach(function(d) { if (counts[d.status] !== undefined) counts[d.status]++; });
+  var assignedPending = asgn.filter(function(d) { return d.status !== 'Completed'; }).length;
+
+  document.getElementById('dispatcher-stats').innerHTML =
+    '<div class="stat-card stat-total"><div class="stat-icon">📦</div><div class="stat-info"><h3>'+counts.total+'</h3><p>My Total</p></div></div>' +
+    '<div class="stat-card stat-process"><div class="stat-icon">🔄</div><div class="stat-info"><h3>'+counts['In Process']+'</h3><p>In Process</p></div></div>' +
+    '<div class="stat-card stat-dispatch"><div class="stat-icon">🚚</div><div class="stat-info"><h3>'+counts.Dispatched+'</h3><p>Dispatched</p></div></div>' +
+    '<div class="stat-card stat-complete"><div class="stat-icon">🏆</div><div class="stat-info"><h3>'+counts.Completed+'</h3><p>Completed</p></div></div>' +
+    '<div class="stat-card" style="border-left:4px solid var(--accent)"><div class="stat-icon">📥</div><div class="stat-info"><h3>'+assignedPending+'</h3><p>Assigned to Me</p></div></div>';
+
+  // Update tab badges
+  var myTotal = all.length;
+  var assignedTotal = asgn.length;
+  var myBadge = document.getElementById('my-count-badge');
+  var asnBadge = document.getElementById('assigned-count-badge');
+  if (myBadge) myBadge.textContent = myTotal;
+  if (asnBadge) asnBadge.textContent = assignedTotal;
+}
+
+function switchDispatcherTab(tab) {
+  currentDispatcherTab = tab;
+  document.getElementById('tab-my').classList.toggle('active', tab === 'my');
+  document.getElementById('tab-assigned').classList.toggle('active', tab === 'assigned');
+  document.getElementById('panel-my').classList.toggle('hidden', tab !== 'my');
+  document.getElementById('panel-assigned').classList.toggle('hidden', tab !== 'assigned');
+  if (tab === 'assigned') filterAssignedTasks();
+}
+
+/* ── My Entries ───────────────────────────────────────────── */
+function filterEntries() {
+  var dispatches = getDispatches().filter(function(d) { return d.createdBy === SESSION.userId; });
+  var search  = (document.getElementById('search-input').value || '').toLowerCase();
+  var status  = document.getElementById('filter-status').value;
+  var website = document.getElementById('filter-website').value;
+
+  if (search)  dispatches = dispatches.filter(function(d) { return (d.customerName||'').toLowerCase().includes(search)||(d.orderId||'').toLowerCase().includes(search)||(d.trackingNo||'').toLowerCase().includes(search); });
   if (status)  dispatches = dispatches.filter(function(d) { return d.status === status; });
   if (website) dispatches = dispatches.filter(function(d) { return d.website === website; });
-
-  dispatches.sort(function(a, b) { return new Date(b.createdAt) - new Date(a.createdAt); });
-  renderTable(dispatches);
+  dispatches.sort(function(a,b) { return new Date(b.createdAt)-new Date(a.createdAt); });
+  renderTable(dispatches, 'entries-tbody', 'entries-empty', 'entries-table-wrap', false);
 }
 
-function renderTable(dispatches) {
-  const tbody = document.getElementById('entries-tbody');
-  const empty = document.getElementById('entries-empty');
-  const wrap  = document.getElementById('entries-table-wrap');
+function clearFilters() {
+  document.getElementById('search-input').value = '';
+  document.getElementById('filter-status').value = '';
+  document.getElementById('filter-website').value = '';
+  filterEntries();
+}
 
-  if (dispatches.length === 0) {
-    tbody.innerHTML = '';
-    empty.classList.remove('hidden');
-    wrap.classList.add('hidden');
-    return;
+/* ── Assigned to Me ───────────────────────────────────────── */
+function filterAssignedTasks() {
+  var tasks = getDispatches().filter(function(d) { return d.assignedTo === SESSION.userId; });
+  tasks.sort(function(a,b) {
+    var pOrder = { Emergency:0, Urgent:1, Normal:2, Moderate:3 };
+    var pa = pOrder[a.priority||'Normal'] !== undefined ? pOrder[a.priority] : 99;
+    var pb = pOrder[b.priority||'Normal'] !== undefined ? pOrder[b.priority] : 99;
+    if (pa !== pb) return pa - pb;
+    return new Date(b.createdAt) - new Date(a.createdAt);
+  });
+
+  var pending = tasks.filter(function(d) { return d.status !== 'Completed'; }).length;
+  var banner = document.getElementById('assigned-banner');
+  var countText = document.getElementById('assigned-count-text');
+  if (pending > 0) {
+    banner.classList.remove('hidden');
+    if (countText) countText.textContent = pending;
+  } else {
+    banner.classList.add('hidden');
   }
-  empty.classList.add('hidden');
-  wrap.classList.remove('hidden');
 
+  renderTable(tasks, 'assigned-tbody', 'assigned-empty', 'assigned-table-wrap', true);
+}
+
+function renderTable(dispatches, tbodyId, emptyId, wrapId, isAssigned) {
+  var tbody = document.getElementById(tbodyId);
+  var empty = document.getElementById(emptyId);
+  var wrap  = document.getElementById(wrapId);
+
+  if (!dispatches.length) {
+    tbody.innerHTML = ''; empty.classList.remove('hidden'); wrap.classList.add('hidden'); return;
+  }
+  empty.classList.add('hidden'); wrap.classList.remove('hidden');
+
+  var pColor;
   tbody.innerHTML = dispatches.map(function(d, i) {
-    const isCompleted = d.status === 'Completed';
-    const nextStatuses = STATUS_FLOW[d.status] || [d.status];
-    const statusOpts = nextStatuses.map(function(s) {
-      return '<option value="' + s + '"' + (d.status === s ? ' selected' : '') + '>' + s + '</option>';
-    }).join('');
-    const emailSent = d.emailSent === true;
-    const completeDisabled = !emailSent ? 'disabled title="Send email first to enable Complete"' : '';
+    var isCompleted = d.status === 'Completed';
+    var nextStatuses = STATUS_FLOW[d.status] || [d.status];
+    var statusOpts = nextStatuses.map(function(s) { return '<option value="'+s+'"'+(d.status===s?' selected':'')+'>'+s+'</option>'; }).join('');
+    var emailSent = d.emailSent === true;
+    var completeDisabled = !emailSent ? 'disabled title="Send notification first"' : '';
+    pColor = PRIORITY_COLORS[d.priority||'Normal'] || '#555';
 
-    return `<tr id="row-${d.id}" data-ocid="dash.entries.row.${i+1}">
-      <td>${escHtml(String(d.slNo))}</td>
-      <td>
-        <strong>${escHtml(d.customerName)}</strong>
-        ${d.nameType ? '<br><span class="small text-muted">' + escHtml(d.nameType) + '</span>' : ''}
-        ${d.notes ? '<br><span class="small text-muted" title="' + escHtml(d.notes) + '">📝</span>' : ''}
-      </td>
-      <td><strong>${escHtml(d.orderId)}</strong></td>
-      <td>${escHtml(d.website)}</td>
-      <td>${escHtml(d.nameType||'—')}</td>
-      <td>${escHtml(d.dispatchType)}</td>
-      <td>${escHtml(d.trackingNo||'—')}</td>
-      <td>
-        ${isCompleted
-          ? '<span class="badge badge-completed">Completed</span>'
-          : `<select class="status-select" onchange="changeStatus('${d.id}', this.value)" data-ocid="dash.entries.status_select.${i+1}">${statusOpts}</select>`
-        }
-      </td>
-      <td>
-        ${formatDate(d.createdAt)}
-        <br><span class="small text-muted">${timeAgo(d.updatedAt)}</span>
-      </td>
-      <td class="actions">
-        <div class="table-actions">
-          ${!isCompleted ? `<button type="button" class="btn btn-ghost btn-sm" onclick="editEntry('${d.id}')" data-ocid="dash.entries.edit_button.${i+1}">✏️</button>` : ''}
-          <button type="button" class="btn btn-ghost btn-sm" onclick="openEmailModal('${d.id}')" data-ocid="dash.entries.email_button.${i+1}" title="${emailSent ? 'Email sent' : 'Send email'}">📧${emailSent ? '✓' : ''}</button>
-          <button type="button" class="btn btn-ghost btn-sm" onclick="printEntry('${d.id}')" data-ocid="dash.entries.print_button.${i+1}">🖨</button>
-          ${!isCompleted ? `<button type="button" class="btn btn-primary btn-sm" onclick="completeEntry('${d.id}')" ${completeDisabled} data-ocid="dash.entries.complete_button.${i+1}" style="opacity:${emailSent?'1':'0.4'}">✅ Complete</button>` : ''}
-          ${!isCompleted ? `<button type="button" class="btn btn-danger btn-sm" onclick="deleteEntry('${d.id}')" data-ocid="dash.entries.delete_button.${i+1}">🗑</button>` : ''}
-        </div>
-      </td>
-    </tr>`;
+    var assignedByCell = isAssigned ? '<td><span class="badge badge-dispatched">'+escHtml(d.assignedByName||'—')+'</span></td>' : '';
+
+    return '<tr id="row-'+d.id+'" data-ocid="dash.entries.row.'+(i+1)+'">' +
+      '<td>'+escHtml(String(d.slNo))+'</td>' +
+      '<td><strong>'+escHtml(d.customerName)+'</strong>'+(d.nameType?'<br><span class="small text-muted">'+escHtml(d.nameType)+'</span>':'')+(d.notes?'<br><span class="small text-muted" title="'+escHtml(d.notes)+'">📝</span>':'')+'</td>' +
+      '<td><strong>'+escHtml(d.orderId)+'</strong></td>' +
+      '<td>'+escHtml(d.website)+'</td>' +
+      '<td>'+escHtml(d.dispatchType)+'</td>' +
+      '<td>'+escHtml(d.trackingNo||'—')+'</td>' +
+      '<td><span class="priority-badge" style="background:'+pColor+'">'+escHtml(d.priority||'Normal')+'</span></td>' +
+      assignedByCell +
+      '<td>'+(isCompleted ? '<span class="badge badge-completed">Completed</span>' : '<select class="status-select" onchange="changeStatus(\''+d.id+'\',this.value)" data-ocid="dash.entries.status_select.'+(i+1)+'">'+statusOpts+'</select>')+'</td>' +
+      '<td>'+formatDate(d.createdAt)+'<br><span class="small text-muted">'+timeAgo(d.updatedAt)+'</span></td>' +
+      '<td class="actions"><div class="table-actions">' +
+        (!isCompleted ? '<button type="button" class="btn btn-ghost btn-sm" onclick="editEntry(\''+d.id+'\')" data-ocid="dash.entries.edit_button.'+(i+1)+'">✏️</button>' : '') +
+        '<button type="button" class="btn btn-ghost btn-sm" onclick="openEmailModal(\''+d.id+'\')" data-ocid="dash.entries.email_button.'+(i+1)+'" title="'+(emailSent?'Notification sent':'Send notification')+'">📧'+(emailSent?'✓':'')+'</button>' +
+        '<button type="button" class="btn btn-ghost btn-sm" onclick="printEntry(\''+d.id+'\')" data-ocid="dash.entries.print_button.'+(i+1)+'">🖨</button>' +
+        (!isCompleted ? '<button type="button" class="btn btn-primary btn-sm" onclick="completeEntry(\''+d.id+'\')" '+completeDisabled+' data-ocid="dash.entries.complete_button.'+(i+1)+'" style="opacity:'+(emailSent?'1':'0.4')+'">✅ Complete</button>' : '') +
+        (!isCompleted ? '<button type="button" class="btn btn-danger btn-sm" onclick="deleteEntry(\''+d.id+'\')" data-ocid="dash.entries.delete_button.'+(i+1)+'">🗑</button>' : '') +
+      '</div></td></tr>';
   }).join('');
 }
 
 /* ── Status Change ────────────────────────────────────────── */
 function changeStatus(id, newStatus) {
-  if (newStatus === 'Delivered') newStatus = 'Completed';
   updateDispatchStatus(id, newStatus);
-  if (newStatus === 'Completed') showToast('Entry marked as Completed 🎉', 'success');
-  else showToast('Status updated to ' + newStatus, 'success');
-  loadStats();
-  filterEntries();
+  showToast('Status updated to ' + newStatus, 'success');
+  refreshCurrentView();
+}
+
+function refreshCurrentView() {
+  if (SESSION.role === 'assigner') {
+    loadAssignerStats(); filterAssignerTasks();
+  } else {
+    loadDispatcherStats(); filterEntries(); filterAssignedTasks();
+  }
 }
 
 /* ── Add/Edit Entry Modal ─────────────────────────────────── */
@@ -396,25 +638,32 @@ function openEntryModal(prefillId) {
   editingEntryId = prefillId || null;
   clearEntryForm();
 
+  var entry;
   if (prefillId) {
-    const entry = getDispatches().find(function(d) { return d.id === prefillId; });
+    entry = getDispatches().find(function(d) { return d.id === prefillId; });
     if (entry) {
-      document.getElementById('entry-modal-title').textContent = 'Edit Entry';
-      document.getElementById('entry-id').value      = entry.id;
-      document.getElementById('e-slno').value        = entry.slNo;
-      document.getElementById('e-name').value        = entry.customerName;
-      document.getElementById('e-address').value     = entry.address;
-      document.getElementById('e-orderid').value     = entry.orderId;
-      document.getElementById('e-email').value       = entry.customerEmail;
-      document.getElementById('e-website').value     = entry.website;
+      document.getElementById('entry-modal-title').textContent = SESSION.role === 'assigner' ? 'Edit Task' : 'Edit Entry';
+      document.getElementById('entry-id').value     = entry.id;
+      document.getElementById('e-slno').value       = entry.slNo;
+      document.getElementById('e-name').value       = entry.customerName;
+      document.getElementById('e-address').value    = entry.address;
+      document.getElementById('e-orderid').value    = entry.orderId;
+      document.getElementById('e-email').value      = entry.customerEmail;
+      document.getElementById('e-phone').value      = entry.customerPhone || '';
+      document.getElementById('e-website').value    = entry.website;
       document.getElementById('e-nametype').value   = entry.nameType || '';
-      document.getElementById('e-dtype').value       = entry.dispatchType;
-      document.getElementById('e-tracking').value    = entry.trackingNo;
-      document.getElementById('e-notes').value       = entry.notes;
+      document.getElementById('e-dtype').value      = entry.dispatchType;
+      document.getElementById('e-tracking').value   = entry.trackingNo;
+      document.getElementById('e-notes').value      = entry.notes;
+      document.getElementById('e-priority').value   = entry.priority || 'Normal';
+      onDispatchTypeChange();
+      if (SESSION.role === 'assigner' && entry.assignedTo) {
+        document.getElementById('e-assign-dispatcher').value = entry.assignedTo;
+      }
       (entry.products || []).forEach(function(p) { addProductRow(p.name, p.qty); });
     }
   } else {
-    document.getElementById('entry-modal-title').textContent = 'Add New Entry';
+    document.getElementById('entry-modal-title').textContent = SESSION.role === 'assigner' ? 'Assign New Task' : 'Add New Entry';
     document.getElementById('e-slno').value = getNextSlNo(SESSION.userId);
   }
   document.getElementById('entry-modal-overlay').classList.add('open');
@@ -427,193 +676,203 @@ function closeEntryModal() {
 }
 
 function clearEntryForm() {
-  ['entry-id','e-slno','e-name','e-address','e-orderid','e-email','e-tracking','e-notes'].forEach(function(id) {
-    const el = document.getElementById(id);
-    if (el) el.value = '';
+  ['entry-id','e-slno','e-name','e-address','e-orderid','e-email','e-phone','e-tracking','e-notes'].forEach(function(id) {
+    var el = document.getElementById(id); if (el) el.value = '';
   });
   document.getElementById('e-website').value  = '';
   document.getElementById('e-dtype').value    = '';
   document.getElementById('e-nametype').value = '';
+  document.getElementById('e-priority').value = '';
   document.getElementById('products-list').innerHTML = '';
-  ['e-slno-err','e-name-err','e-orderid-err','e-website-err','e-dtype-err'].forEach(function(id) {
-    const el = document.getElementById(id);
-    if (el) el.textContent = '';
+  document.getElementById('tracking-field-wrap').style.display = '';
+  ['e-slno-err','e-name-err','e-orderid-err','e-website-err','e-dtype-err','e-tracking-err','e-dispatcher-err'].forEach(function(id) {
+    var el = document.getElementById(id); if (el) el.textContent = '';
   });
 }
 
 /* ── Product Rows ─────────────────────────────────────────── */
 function addProductRow(name, qty) {
-  const list = document.getElementById('products-list');
-  const idx  = list.children.length + 1;
-  const row  = document.createElement('div');
+  var list = document.getElementById('products-list');
+  var idx  = list.children.length + 1;
+  var row  = document.createElement('div');
   row.className = 'product-row';
-  row.innerHTML = `
-    <input type="text" class="form-control product-name" placeholder="Product name" value="${escHtml(name||'')}" data-ocid="dash.entry.product_name.input.${idx}" />
-    <div class="qty-wrap">
-      <button type="button" class="btn btn-ghost btn-sm" onclick="changeQty(this,-1)" data-ocid="dash.entry.product_qty_minus.button.${idx}">−</button>
-      <input type="number" class="form-control product-qty" value="${qty||1}" min="1" data-ocid="dash.entry.product_qty.input.${idx}" />
-      <button type="button" class="btn btn-ghost btn-sm" onclick="changeQty(this,1)" data-ocid="dash.entry.product_qty_plus.button.${idx}">+</button>
-    </div>
-    <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.product-row').remove()" data-ocid="dash.entry.product_remove.button.${idx}">✕</button>`;
+  row.innerHTML =
+    '<input type="text" class="form-control product-name" placeholder="Product name" value="'+escHtml(name||'')+'" data-ocid="dash.entry.product_name.input.'+idx+'" />' +
+    '<div class="qty-wrap">' +
+      '<button type="button" class="btn btn-ghost btn-sm" onclick="changeQty(this,-1)" data-ocid="dash.entry.product_qty_minus.button.'+idx+'">−</button>' +
+      '<input type="number" class="form-control product-qty" value="'+(qty||1)+'" min="1" data-ocid="dash.entry.product_qty.input.'+idx+'" />' +
+      '<button type="button" class="btn btn-ghost btn-sm" onclick="changeQty(this,1)" data-ocid="dash.entry.product_qty_plus.button.'+idx+'">+</button>' +
+    '</div>' +
+    '<button type="button" class="btn btn-danger btn-sm" onclick="this.closest(\'.product-row\').remove()" data-ocid="dash.entry.product_remove.button.'+idx+'">✕</button>';
   list.appendChild(row);
 }
 
 function changeQty(btn, delta) {
-  const input = btn.closest('.qty-wrap').querySelector('.product-qty');
-  const val = parseInt(input.value) || 1;
-  input.value = Math.max(1, val + delta);
+  var input = btn.closest('.qty-wrap').querySelector('.product-qty');
+  input.value = Math.max(1, (parseInt(input.value) || 1) + delta);
 }
 
 function getProductRows() {
   return Array.from(document.querySelectorAll('#products-list .product-row')).map(function(row) {
-    return {
-      name: row.querySelector('.product-name').value.trim(),
-      qty:  parseInt(row.querySelector('.product-qty').value) || 1,
-    };
+    return { name: row.querySelector('.product-name').value.trim(), qty: parseInt(row.querySelector('.product-qty').value) || 1 };
   }).filter(function(p) { return p.name; });
 }
 
 function saveEntry(statusOverride) {
-  let valid = true;
-  const id        = document.getElementById('entry-id').value;
-  const slNo      = parseInt(document.getElementById('e-slno').value) || 0;
-  const name      = document.getElementById('e-name').value.trim();
-  const address   = document.getElementById('e-address').value.trim();
-  const orderId   = document.getElementById('e-orderid').value.trim();
-  const email     = document.getElementById('e-email').value.trim();
-  const website   = document.getElementById('e-website').value;
-  const nameType  = document.getElementById('e-nametype').value;
-  const dtype     = document.getElementById('e-dtype').value;
-  const tracking  = document.getElementById('e-tracking').value.trim();
-  const notes     = document.getElementById('e-notes').value.trim();
-  const products  = getProductRows();
+  var valid   = true;
+  var id      = document.getElementById('entry-id').value;
+  var slNo    = parseInt(document.getElementById('e-slno').value) || 0;
+  var name    = document.getElementById('e-name').value.trim();
+  var address = document.getElementById('e-address').value.trim();
+  var orderId = document.getElementById('e-orderid').value.trim();
+  var email   = document.getElementById('e-email').value.trim();
+  var phone   = document.getElementById('e-phone').value.trim();
+  var website = document.getElementById('e-website').value;
+  var nameType= document.getElementById('e-nametype').value;
+  var dtype   = document.getElementById('e-dtype').value;
+  var tracking= document.getElementById('e-tracking').value.trim();
+  var notes   = document.getElementById('e-notes').value.trim();
+  var priority= document.getElementById('e-priority').value || 'Normal';
+  var products= getProductRows();
 
   if (!slNo)    { document.getElementById('e-slno-err').textContent = 'Sl No required'; valid = false; }
   if (!name)    { document.getElementById('e-name-err').textContent = 'Customer name required'; valid = false; }
   if (!orderId) { document.getElementById('e-orderid-err').textContent = 'Order ID required'; valid = false; }
   if (!website) { document.getElementById('e-website-err').textContent = 'Select a website'; valid = false; }
   if (!dtype)   { document.getElementById('e-dtype-err').textContent = 'Select dispatch type'; valid = false; }
+
+  // Tracking required unless Post Card / Gift
+  var noTracking = NO_TRACKING_TYPES.includes(dtype);
+  if (!noTracking && !tracking && statusOverride !== 'Draft') {
+    document.getElementById('e-tracking-err').textContent = 'Tracking number required for this dispatch type';
+    valid = false;
+  }
+
+  // Assigner: dispatcher must be selected
+  var assignedToId = '', assignedToName = '', dSel, du;
+  if (SESSION.role === 'assigner') {
+    dSel = document.getElementById('e-assign-dispatcher');
+    assignedToId = dSel.value;
+    if (!assignedToId && statusOverride !== 'Draft') {
+      document.getElementById('e-dispatcher-err').textContent = 'Please select a dispatcher';
+      valid = false;
+    } else if (assignedToId) {
+      du = getUsers().find(function(u){ return u.id === assignedToId; });
+      if (du) assignedToName = du.name;
+    }
+  }
+
   if (!valid) return;
 
-  const data = { slNo, customerName: name, nameType, address, orderId, website, dispatchType: dtype, trackingNo: tracking, customerEmail: email, products, notes, status: statusOverride };
+  var data = {
+    slNo, customerName: name, nameType, address, orderId,
+    website, dispatchType: dtype,
+    trackingNo: noTracking ? '' : tracking,
+    customerEmail: email, customerPhone: phone,
+    products, notes, priority,
+    status: statusOverride,
+    assignedTo: assignedToId || null,
+    assignedToName: assignedToName || null,
+    assignedBy: SESSION.role === 'assigner' ? SESSION.userId : null,
+    assignedByName: SESSION.role === 'assigner' ? SESSION.name : null,
+  };
 
+  var existing;
   if (id) {
-    // Keep original status if editing (don't override with the button's status)
-    const existing = getDispatches().find(function(d) { return d.id === id; });
+    existing = getDispatches().find(function(d) { return d.id === id; });
     data.status = existing ? existing.status : statusOverride;
     updateDispatch(id, data);
     showToast('Entry updated', 'success');
   } else {
     createDispatch(data, SESSION);
-    showToast(statusOverride === 'Draft' ? 'Draft saved' : 'Entry saved', 'success');
+    showToast(statusOverride === 'Draft' ? 'Draft saved' : (SESSION.role === 'assigner' ? 'Task assigned' : 'Entry saved'), 'success');
   }
 
   closeEntryModal();
-  loadStats();
-  filterEntries();
+  refreshCurrentView();
 }
 
 function editEntry(id) { openEntryModal(id); }
 
-/* ── Delete ────────────────────────────────────────────────── */
 function deleteEntry(id) {
-  confirmAction('Delete this dispatch entry? This cannot be undone.', function() {
-    deleteDispatch(id);
-    showToast('Entry deleted', 'success');
-    loadStats();
-    filterEntries();
+  confirmAction('Delete this entry? This cannot be undone.', function() {
+    deleteDispatch(id); showToast('Entry deleted', 'success'); refreshCurrentView();
   }, 'Delete Entry');
 }
 
-/* ── Complete ─────────────────────────────────────────────── */
 function completeEntry(id) {
-  const entry = getDispatches().find(function(d) { return d.id === id; });
+  var entry = getDispatches().find(function(d) { return d.id === id; });
   if (!entry) return;
-  if (!entry.emailSent) {
-    showToast('Please send the email first before completing this entry.', 'warn');
-    return;
-  }
+  if (!entry.emailSent) { showToast('Please send the notification first before completing.', 'warn'); return; }
   confirmAction('Mark this entry as Completed? This cannot be undone.', function() {
     updateDispatchStatus(id, 'Completed');
     showToast('Entry marked as Completed', 'success');
-    loadStats();
-    filterEntries();
+    refreshCurrentView();
   }, 'Complete Entry');
 }
 
-/* ── Clear Filters ───────────────────────────────────────── */
-function clearFilters() {
-  document.getElementById('search-input').value = '';
-  document.getElementById('filter-status').value = '';
-  document.getElementById('filter-website').value = '';
-  filterEntries();
-}
-
-/* ── Email Modal ─────────────────────────────────────────── */
+/* ── Email / WhatsApp Modal ───────────────────────────────── */
 function openEmailModal(id) {
-  const entry = getDispatches().find(function(d) { return d.id === id; });
+  var entry = getDispatches().find(function(d) { return d.id === id; });
   if (!entry) return;
   currentEmailEntryId = id;
-
   document.getElementById('em-to').value      = entry.customerEmail || '';
+  document.getElementById('em-phone').value   = entry.customerPhone || '';
   document.getElementById('em-subject').value = buildEmailSubject(entry);
   document.getElementById('em-body').value    = buildEmailBody(entry);
   document.getElementById('email-modal-overlay').classList.add('open');
 }
-function closeEmailModal() {
-  document.getElementById('email-modal-overlay').classList.remove('open');
-  currentEmailEntryId = null;
-}
+function closeEmailModal() { document.getElementById('email-modal-overlay').classList.remove('open'); currentEmailEntryId = null; }
 function copyEmailBody() {
-  const subject = document.getElementById('em-subject').value;
-  const body    = document.getElementById('em-body').value;
-  const text    = 'Subject: ' + subject + '\n\n' + body;
-  navigator.clipboard.writeText(text).then(function() {
-    showToast('Copied to clipboard', 'success');
-  }).catch(function() { showToast('Copy failed — select and copy manually', 'warn'); });
+  var text = 'Subject: ' + document.getElementById('em-subject').value + '\n\n' + document.getElementById('em-body').value;
+  navigator.clipboard.writeText(text).then(function() { showToast('Copied to clipboard', 'success'); }).catch(function() { showToast('Copy failed — select manually', 'warn'); });
 }
 function openGmail() {
-  const to      = encodeURIComponent(document.getElementById('em-to').value);
-  const subject = encodeURIComponent(document.getElementById('em-subject').value);
-  const body    = encodeURIComponent(document.getElementById('em-body').value);
-  window.open('https://mail.google.com/mail/?view=cm&to=' + to + '&su=' + subject + '&body=' + body, '_blank');
+  window.open('https://mail.google.com/mail/?view=cm&to=' + encodeURIComponent(document.getElementById('em-to').value) + '&su=' + encodeURIComponent(document.getElementById('em-subject').value) + '&body=' + encodeURIComponent(document.getElementById('em-body').value), '_blank');
+}
+function openWhatsApp() {
+  var phone = (document.getElementById('em-phone').value || '').replace(/\D/g,'');
+  var msg   = encodeURIComponent(document.getElementById('em-body').value);
+  var url   = phone ? 'https://wa.me/' + phone + '?text=' + msg : 'https://wa.me/?text=' + msg;
+  window.open(url, '_blank');
 }
 function markSent() {
   if (currentEmailEntryId) {
     updateDispatch(currentEmailEntryId, { emailSent: true, emailSentAt: new Date().toISOString() });
-    showToast('Email marked as sent — Complete button is now enabled.', 'success');
+    showToast('Marked as sent — Complete button is now enabled.', 'success');
   }
   closeEmailModal();
-  filterEntries();
+  refreshCurrentView();
 }
 
-/* ── Print Entry ─────────────────────────────────────────── */
+/* ── Print ────────────────────────────────────────────────── */
 function printEntry(id) {
-  const entry = getDispatches().find(function(d) { return d.id === id; });
+  var entry = getDispatches().find(function(d) { return d.id === id; });
   if (!entry) return;
-  const printArea = document.getElementById('print-area');
-  const productLines = (entry.products||[]).map(function(p){ return escHtml(p.name) + ' × ' + p.qty; }).join(', ') || '—';
-  printArea.innerHTML = `
-    <div class="print-entry">
-      <h2 style="color:#1a237e;border-bottom:2px solid #f9a825;padding-bottom:8px;margin-bottom:16px">
-        Dispatch Entry — Vyoma Linguistic Labs Foundation
-      </h2>
-      <div class="print-row"><label>Sl No:</label><span>${entry.slNo}</span></div>
-      <div class="print-row"><label>Customer Name:</label><span>${escHtml(entry.customerName)}</span></div>
-      ${entry.nameType ? '<div class="print-row"><label>Name Type:</label><span>' + escHtml(entry.nameType) + '</span></div>' : ''}
-      <div class="print-row"><label>Address:</label><span>${escHtml(entry.address||'—')}</span></div>
-      <div class="print-row"><label>Order ID:</label><span>${escHtml(entry.orderId)}</span></div>
-      <div class="print-row"><label>Customer Email:</label><span>${escHtml(entry.customerEmail||'—')}</span></div>
-      <div class="print-row"><label>Website:</label><span>${escHtml(entry.website)}</span></div>
-      <div class="print-row"><label>Dispatch Type:</label><span>${escHtml(entry.dispatchType)}</span></div>
-      <div class="print-row"><label>Tracking Number:</label><span>${escHtml(entry.trackingNo||'—')}</span></div>
-      <div class="print-row"><label>Products Purchased:</label><span>${productLines}</span></div>
-      <div class="print-row"><label>Status:</label><span>${escHtml(entry.status)}</span></div>
-      <div class="print-row"><label>Created By:</label><span>${escHtml(entry.createdByName)}</span></div>
-      <div class="print-row"><label>Created At:</label><span>${formatDateTime(entry.createdAt)}</span></div>
-      <div class="print-row"><label>Last Updated:</label><span>${formatDateTime(entry.updatedAt)}</span></div>
-      ${entry.notes ? '<div class="print-row"><label>Notes:</label><span>' + escHtml(entry.notes) + '</span></div>' : ''}
-    </div>`;
+  var printArea = document.getElementById('print-area');
+  var productLines = (entry.products||[]).map(function(p){ return escHtml(p.name)+' × '+p.qty; }).join(', ') || '—';
+  printArea.innerHTML =
+    '<div class="print-entry">' +
+    '<h2 style="color:#1a237e;border-bottom:2px solid #f9a825;padding-bottom:8px;margin-bottom:16px">Dispatch Entry — Vyoma Linguistic Labs Foundation</h2>' +
+    '<div class="print-row"><label>Sl No:</label><span>'+entry.slNo+'</span></div>' +
+    '<div class="print-row"><label>Customer Name:</label><span>'+escHtml(entry.customerName)+'</span></div>' +
+    (entry.nameType ? '<div class="print-row"><label>Name Type:</label><span>'+escHtml(entry.nameType)+'</span></div>' : '') +
+    '<div class="print-row"><label>Address:</label><span>'+escHtml(entry.address||'—')+'</span></div>' +
+    '<div class="print-row"><label>Order ID:</label><span>'+escHtml(entry.orderId)+'</span></div>' +
+    '<div class="print-row"><label>Customer Email:</label><span>'+escHtml(entry.customerEmail||'—')+'</span></div>' +
+    '<div class="print-row"><label>Customer Phone:</label><span>'+escHtml(entry.customerPhone||'—')+'</span></div>' +
+    '<div class="print-row"><label>Website:</label><span>'+escHtml(entry.website)+'</span></div>' +
+    '<div class="print-row"><label>Dispatch Type:</label><span>'+escHtml(entry.dispatchType)+'</span></div>' +
+    (entry.trackingNo ? '<div class="print-row"><label>Tracking Number:</label><span>'+escHtml(entry.trackingNo)+'</span></div>' : '') +
+    '<div class="print-row"><label>Priority:</label><span>'+escHtml(entry.priority||'Normal')+'</span></div>' +
+    '<div class="print-row"><label>Products Purchased:</label><span>'+productLines+'</span></div>' +
+    '<div class="print-row"><label>Status:</label><span>'+escHtml(entry.status)+'</span></div>' +
+    (entry.assignedToName ? '<div class="print-row"><label>Assigned To:</label><span>'+escHtml(entry.assignedToName)+'</span></div>' : '') +
+    '<div class="print-row"><label>Created By:</label><span>'+escHtml(entry.createdByName)+'</span></div>' +
+    '<div class="print-row"><label>Created At:</label><span>'+formatDateTime(entry.createdAt)+'</span></div>' +
+    '<div class="print-row"><label>Last Updated:</label><span>'+formatDateTime(entry.updatedAt)+'</span></div>' +
+    (entry.notes ? '<div class="print-row"><label>Notes:</label><span>'+escHtml(entry.notes)+'</span></div>' : '') +
+    '</div>';
   window.print();
 }
 </script>

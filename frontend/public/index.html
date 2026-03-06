@@ -169,10 +169,10 @@
       }
 
       showToast('Welcome back, ' + result.session.name + '!', 'success');
-      setTimeout(function() {
-        if (result.session.role === 'admin') window.location.href = 'admin.html';
-        else window.location.href = 'dashboard.html';
-      }, 600);
+        setTimeout(function() {
+          if (result.session.role === 'admin') window.location.href = 'admin.html';
+          else window.location.href = 'dashboard.html'; // dispatcher, assigner, viewer
+        }, 600);
     }, 500);
   });
 
