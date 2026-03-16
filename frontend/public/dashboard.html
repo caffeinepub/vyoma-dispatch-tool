@@ -6,6 +6,8 @@
   <title>Dashboard — Vyoma Dispatch Tool</title>
   <link rel="stylesheet" href="styles.css" />
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.4/dist/tesseract.min.js"></script>
   <style>
     body { background: var(--bg); }
     .dash-main { padding: 24px; flex: 1; }
@@ -19,41 +21,293 @@
     .qty-wrap { display:flex; align-items:center; gap:4px; flex-shrink:0; }
     .qty-wrap button { width:28px; height:28px; padding:0; line-height:1; font-size:1rem; font-weight:700; border-radius:4px; }
     .qty-wrap input[type="number"] { width:52px; text-align:center; padding:4px; }
-    .priority-badge { display:inline-block; padding:2px 8px; border-radius:20px; font-size:0.7rem; font-weight:600; color:#fff; }
-    .assigned-banner { background:linear-gradient(135deg,#1565c0,#3949ab); color:#fff; border-radius:var(--radius-sm); padding:10px 18px; margin-bottom:16px; font-size:0.88rem; display:flex; align-items:center; gap:10px; }
-    .tab-bar { display:flex; gap:0; margin-bottom:20px; border-bottom:2px solid var(--border); }
-    .tab-btn { padding:10px 22px; background:none; border:none; cursor:pointer; font-size:0.9rem; font-weight:500; color:var(--text-muted); border-bottom:3px solid transparent; margin-bottom:-2px; transition:all 0.2s; }
-    .tab-btn.active { color:var(--primary); border-bottom-color:var(--primary); }
-    .tab-btn:hover:not(.active) { color:var(--text); }
-    .bulk-import-area { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
     .logo-img-header { max-height:40px; width:auto; }
     #tracking-field-wrap label .required { color:var(--danger); }
-  </style>
+    /* Complete flow steps */
+    .complete-steps { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .complete-step {
+      display:inline-flex; align-items:center; gap:5px;
+      padding:4px 12px; border-radius:20px; font-size:0.75rem; font-weight:600;
+      border:1.5px solid var(--border); color:var(--text-muted); background:var(--surface2);
+      transition:all 0.2s;
+    }
+    .complete-step.done { background:var(--s-delivered-bg); color:var(--s-delivered); border-color:rgba(46,125,50,0.3); }
+    .complete-step.done::before { content:'✓ '; }
+    .complete-step.pending::before { content:'○ '; }
+    .complete-step.pending { opacity:0.6; }
+  
+  /* OCR Feature */
+  .ocr-dropzone {
+    border: 2px dashed #a5b4fc;
+    border-radius: 12px;
+    padding: 40px 20px;
+    text-align: center;
+    cursor: pointer;
+    background: #f5f3ff;
+    transition: all 0.2s;
+  }
+  .ocr-dropzone:hover, .ocr-dropzone.drag-over {
+    border-color: #6366f1;
+    background: #ede9fe;
+    transform: scale(1.01);
+  }
+  @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+  .ocr-field-filled { border-color: #6366f1 !important; background: #f5f3ff !important; }
+</style>
 </head>
 <body>
+<div class="app-layout">
 
-<!-- HEADER -->
-<header class="dash-header">
-  <div class="header-brand">
-    <img src="assets/uploads/Vyoma_Logo_Blue_500x243-1--1.jpg" alt="Vyoma Logo" class="logo-img-header" onerror="this.style.display='none'" />
-    <div>
-      <div class="brand-name">Vyoma Linguistic Labs Foundation</div>
-      <div class="brand-sub" id="header-sub">Dispatch Tool</div>
+  <!-- SIDEBAR -->
+  <aside class="sidebar crm-sidebar" id="sidebar">
+    <div class="crm-sidebar-header">
+      <div class="crm-sidebar-brand">
+        <img src="assets/uploads/Vyoma_Logo_Blue_500x243-1--1.jpg" alt="Vyoma Logo" class="crm-brand-logo" onerror="this.style.display='none'" />
+        <div class="crm-brand-text">
+          <div class="crm-brand-name">Vyoma Labs</div>
+          <div class="crm-brand-sub">Dispatch CRM</div>
+        </div>
+      </div>
+      <button type="button" class="crm-collapse-btn" id="sidebar-collapse-btn" onclick="toggleSidebarCollapse()" title="Collapse sidebar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+    </div>
+    <nav class="sidebar-nav crm-nav">
+      <div class="crm-nav-section">
+        <div class="nav-item active" id="dash-nav-main" data-ocid="dash.nav.main" onclick="showDashNav('main')">
+          <span class="nav-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          </span>
+          <span class="nav-label">Dashboard</span>
+        </div>
+      </div>
+      <div class="crm-nav-section">
+        <div class="crm-section-title">Operations</div>
+        <div class="nav-item" id="dash-nav-dispatches" data-ocid="dash.nav.dispatches" onclick="showDashNav('dispatches')">
+          <span class="nav-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+          </span>
+          <span class="nav-label">Dispatches</span>
+        </div>
+        <div class="nav-item nav-item-soon" onclick="showDashComingSoon('Contacts')" data-ocid="dash.nav.contacts">
+          <span class="nav-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </span>
+          <span class="nav-label">Contacts</span>
+          <span class="nav-soon-badge">Soon</span>
+        </div>
+      </div>
+    </nav>
+    <div class="crm-sidebar-footer">
+      <div class="crm-user-info">
+        <div class="crm-user-avatar" id="sidebar-user-avatar">D</div>
+        <div class="crm-user-details">
+          <div class="crm-user-name" id="sidebar-user-name">User</div>
+          <div class="crm-user-role" id="sidebar-user-role">Dispatcher</div>
+        </div>
+      </div>
+      <button type="button" class="crm-logout-btn" onclick="logout()" title="Logout" data-ocid="dash.sidebar.logout.button">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </button>
+    </div>
+  </aside>
+  <div class="sidebar-overlay" onclick="closeSidebar()"></div>
+
+  <!-- MAIN CONTENT -->
+  <div class="main-content">
+    <!-- TOP BAR -->
+    <header class="app-header crm-topbar">
+      <button type="button" class="sidebar-toggle crm-mobile-toggle" onclick="openSidebar()" title="Open menu" data-ocid="dash.sidebar.toggle">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <div class="crm-topbar-title" id="dash-page-title">Dashboard</div>
+      <div class="crm-topbar-actions">
+        <button type="button" class="crm-icon-btn" onclick="toggleDarkMode()" title="Toggle dark mode" data-ocid="dash.dark.toggle">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+        <div class="crm-user-chip">
+          <div class="user-avatar" id="user-avatar" style="width:30px;height:30px;font-size:0.78rem">D</div>
+          <div>
+            <div class="user-name" id="user-name" style="font-size:0.82rem">—</div>
+            <div class="user-role" id="user-role-label" style="font-size:0.7rem">Dispatcher</div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- PAGE CONTENT -->
+    <main class="page-content dash-main" id="dash-main">
+
+  <!-- ══════════════ CRM HOME DASHBOARD ══════════════ -->
+  <div id="crm-home-view" class="hidden">
+    <div class="crm-dash-header">
+      <div>
+        <h2 class="crm-dash-welcome" id="crm-welcome-msg">Good morning!</h2>
+        <div class="crm-dash-date" id="crm-today-date"></div>
+      </div>
+      <button type="button" class="btn btn-accent" onclick="showDashNav('dispatches')" data-ocid="crm.home.goto_dispatches.button" style="font-size:0.9rem">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:5px"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+        Go to Dispatches
+      </button>
+    </div>
+
+    <!-- KPI CARDS -->
+    <div class="crm-kpi-grid" id="crm-kpi-grid">
+      <div class="crm-kpi-card crm-kpi-total" data-ocid="crm.kpi.total.card">
+        <div class="crm-kpi-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></div>
+        <div class="crm-kpi-content">
+          <div class="crm-kpi-value" id="kpi-total">0</div>
+          <div class="crm-kpi-label">Total Dispatches</div>
+        </div>
+        <div class="crm-kpi-trend" id="kpi-total-trend"></div>
+      </div>
+      <div class="crm-kpi-card crm-kpi-inprocess" data-ocid="crm.kpi.inprocess.card">
+        <div class="crm-kpi-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+        <div class="crm-kpi-content">
+          <div class="crm-kpi-value" id="kpi-inprocess">0</div>
+          <div class="crm-kpi-label">In Process</div>
+        </div>
+      </div>
+      <div class="crm-kpi-card crm-kpi-dispatched" data-ocid="crm.kpi.dispatched.card">
+        <div class="crm-kpi-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></div>
+        <div class="crm-kpi-content">
+          <div class="crm-kpi-value" id="kpi-dispatched">0</div>
+          <div class="crm-kpi-label">Dispatched</div>
+        </div>
+      </div>
+      <div class="crm-kpi-card crm-kpi-completed" data-ocid="crm.kpi.completed.card">
+        <div class="crm-kpi-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></div>
+        <div class="crm-kpi-content">
+          <div class="crm-kpi-value" id="kpi-completed">0</div>
+          <div class="crm-kpi-label">Completed</div>
+        </div>
+      </div>
+      <div class="crm-kpi-card crm-kpi-overdue" data-ocid="crm.kpi.overdue.card">
+        <div class="crm-kpi-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+        <div class="crm-kpi-content">
+          <div class="crm-kpi-value" id="kpi-overdue">0</div>
+          <div class="crm-kpi-label">Overdue</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PIPELINE + CHART ROW -->
+    <div class="crm-dash-row">
+      <!-- Dispatch Pipeline -->
+      <div class="crm-dash-card crm-dash-card-lg" data-ocid="crm.pipeline.panel">
+        <div class="crm-card-header">
+          <span class="crm-card-title">Dispatch Pipeline</span>
+          <span class="crm-card-sub">Current stage distribution</span>
+        </div>
+        <div class="crm-pipeline" id="crm-pipeline">
+          <div class="crm-pipeline-stage" data-status="Draft">
+            <div class="crm-stage-bar-wrap"><div class="crm-stage-bar crm-stage-draft" id="pipe-draft-bar" style="height:4px"></div></div>
+            <div class="crm-stage-count" id="pipe-draft-count">0</div>
+            <div class="crm-stage-label">Draft</div>
+          </div>
+          <div class="crm-pipeline-arrow">›</div>
+          <div class="crm-pipeline-stage" data-status="In Process">
+            <div class="crm-stage-bar-wrap"><div class="crm-stage-bar crm-stage-inprocess" id="pipe-inprocess-bar" style="height:4px"></div></div>
+            <div class="crm-stage-count" id="pipe-inprocess-count">0</div>
+            <div class="crm-stage-label">In Process</div>
+          </div>
+          <div class="crm-pipeline-arrow">›</div>
+          <div class="crm-pipeline-stage" data-status="Dispatched">
+            <div class="crm-stage-bar-wrap"><div class="crm-stage-bar crm-stage-dispatched" id="pipe-dispatched-bar" style="height:4px"></div></div>
+            <div class="crm-stage-count" id="pipe-dispatched-count">0</div>
+            <div class="crm-stage-label">Dispatched</div>
+          </div>
+          <div class="crm-pipeline-arrow">›</div>
+          <div class="crm-pipeline-stage" data-status="Delivered">
+            <div class="crm-stage-bar-wrap"><div class="crm-stage-bar crm-stage-delivered" id="pipe-delivered-bar" style="height:4px"></div></div>
+            <div class="crm-stage-count" id="pipe-delivered-count">0</div>
+            <div class="crm-stage-label">Delivered</div>
+          </div>
+          <div class="crm-pipeline-arrow">›</div>
+          <div class="crm-pipeline-stage" data-status="Completed">
+            <div class="crm-stage-bar-wrap"><div class="crm-stage-bar crm-stage-completed" id="pipe-completed-bar" style="height:4px"></div></div>
+            <div class="crm-stage-count" id="pipe-completed-count">0</div>
+            <div class="crm-stage-label">Completed</div>
+          </div>
+        </div>
+        <!-- Progress bar row -->
+        <div class="crm-pipeline-progress" id="crm-pipeline-progress"></div>
+      </div>
+
+      <!-- Status Donut Chart -->
+      <div class="crm-dash-card crm-dash-card-sm" data-ocid="crm.chart.status.card">
+        <div class="crm-card-header">
+          <span class="crm-card-title">By Priority</span>
+          <span class="crm-card-sub">All dispatches</span>
+        </div>
+        <div class="crm-chart-wrap">
+          <canvas id="crm-priority-chart" height="180"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- TREND + RECENT ROW -->
+    <div class="crm-dash-row">
+      <!-- Daily Trend Chart -->
+      <div class="crm-dash-card crm-dash-card-md" data-ocid="crm.chart.trend.card">
+        <div class="crm-card-header">
+          <span class="crm-card-title">Daily Activity</span>
+          <span class="crm-card-sub">Last 7 days</span>
+        </div>
+        <div class="crm-chart-wrap">
+          <canvas id="crm-trend-chart" height="160"></canvas>
+        </div>
+      </div>
+
+      <!-- Recent Dispatches -->
+      <div class="crm-dash-card crm-dash-card-md" data-ocid="crm.recent.dispatches.card">
+        <div class="crm-card-header">
+          <span class="crm-card-title">Recent Dispatches</span>
+          <a class="crm-card-link" onclick="showDashNav('dispatches')" style="cursor:pointer">View all →</a>
+        </div>
+        <div class="crm-recent-list" id="crm-recent-list">
+          <div class="crm-empty-msg">No dispatches yet</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TOP DISPATCHERS + QUICK ACTIONS -->
+    <div class="crm-dash-row">
+      <div class="crm-dash-card crm-dash-card-md" data-ocid="crm.top.dispatchers.card">
+        <div class="crm-card-header">
+          <span class="crm-card-title">Top Dispatchers</span>
+          <span class="crm-card-sub">By completed tasks</span>
+        </div>
+        <div id="crm-top-dispatchers">
+          <div class="crm-empty-msg">No data yet</div>
+        </div>
+      </div>
+      <div class="crm-dash-card crm-dash-card-md" data-ocid="crm.quick.actions.card">
+        <div class="crm-card-header">
+          <span class="crm-card-title">Quick Actions</span>
+        </div>
+        <div class="crm-quick-actions">
+          <button type="button" class="crm-qa-btn" onclick="showDashNav('dispatches');setTimeout(openEntryModal,200)" data-ocid="crm.qa.add.button">
+            <span class="crm-qa-icon">+</span>
+            <span>New Dispatch</span>
+          </button>
+          <button type="button" class="crm-qa-btn" onclick="showDashNav('dispatches')" data-ocid="crm.qa.view.button">
+            <span class="crm-qa-icon">📋</span>
+            <span>View All</span>
+          </button>
+          <button type="button" class="crm-qa-btn" onclick="showDashNav('dispatches');setTimeout(function(){switchDispatcherTab&&switchDispatcherTab('escalated');},200)" data-ocid="crm.qa.overdue.button">
+            <span class="crm-qa-icon">⚠️</span>
+            <span>Overdue Tasks</span>
+          </button>
+          <button type="button" class="crm-qa-btn" onclick="downloadBulkTemplate()" data-ocid="crm.qa.export.button">
+            <span class="crm-qa-icon">⬇</span>
+            <span>Export Template</span>
+          </button>
+        </div>
+      </div>
     </div>
   </div>
-  <button type="button" class="dark-toggle" onclick="toggleDarkMode()" title="Toggle dark mode" data-ocid="dash.dark.toggle">🌙</button>
-  <div class="header-user">
-    <div class="user-avatar" id="user-avatar">D</div>
-    <div>
-      <div class="user-name" id="user-name">—</div>
-      <div class="user-role" id="user-role-label">Dispatcher</div>
-    </div>
-    <button type="button" class="btn btn-ghost btn-sm" onclick="logout()" style="color:rgba(255,255,255,0.8);border-color:rgba(255,255,255,0.3)" data-ocid="dash.logout.button">Logout</button>
-  </div>
-</header>
 
-<!-- MAIN -->
-<main class="dash-main" id="dash-main">
 
   <!-- ASSIGNER VIEW -->
   <div id="assigner-view">
@@ -66,6 +320,7 @@
           📤 Bulk Import
           <input type="file" id="bulk-upload-input" accept=".xlsx,.xls" style="display:none" onchange="handleBulkUpload(this)" />
         </label>
+        <button type="button" class="btn btn-outline" onclick="openImageOCRModal()" data-ocid="dash.assigner.ocr.open_modal_button" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border-color:#6366f1">📷 Upload via Image</button>
       </div>
     </div>
     <div class="stat-grid mb-20" id="my-stats"></div>
@@ -102,6 +357,7 @@
     <div class="tab-bar">
       <button type="button" class="tab-btn active" id="tab-my" onclick="switchDispatcherTab('my')" data-ocid="dash.dispatcher.my.tab">My Entries <span id="my-count-badge" class="nav-badge" style="position:static;margin-left:6px">0</span></button>
       <button type="button" class="tab-btn" id="tab-assigned" onclick="switchDispatcherTab('assigned')" data-ocid="dash.dispatcher.assigned.tab">Assigned to Me <span id="assigned-count-badge" class="nav-badge" style="position:static;margin-left:6px;background:var(--accent)">0</span></button>
+      <button type="button" class="tab-btn" id="tab-escalated" onclick="switchDispatcherTab('escalated')" data-ocid="dash.dispatcher.escalated.tab">⚠️ Overdue Tasks <span id="escalated-count-badge" class="nav-badge" style="position:static;margin-left:6px;background:#c62828;display:none">0</span></button>
     </div>
 
     <!-- My Entries panel -->
@@ -128,10 +384,38 @@
       </div>
     </div>
 
+    <!-- Overdue / Escalated panel — visible to ALL dispatchers -->
+    <div id="panel-escalated" class="hidden">
+      <div class="escalated-banner">
+        <span class="escalated-banner-icon">⏰</span>
+        <div>
+          <strong>Overdue Tasks — Unattended for 24+ Hours</strong>
+          <p>These tasks were assigned to another dispatcher but have not been actioned. Any dispatcher can step in, update the tracking number, notify the customer and close the task.</p>
+        </div>
+      </div>
+      <div class="table-wrap" id="escalated-table-wrap">
+        <table class="data-table" id="escalated-table">
+          <thead>
+            <tr><th>Sl</th><th>Customer</th><th>Order ID</th><th>Website</th><th>Dispatch Type</th><th>Tracking No</th><th>Priority</th><th>Originally Assigned To</th><th>Overdue Since</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="escalated-tbody"></tbody>
+        </table>
+      </div>
+      <div id="escalated-empty" class="empty-state hidden">
+        <div class="empty-icon">✅</div>
+        <h3>No overdue tasks</h3>
+        <p>All assigned tasks have been actioned within 24 hours. Great job!</p>
+      </div>
+    </div>
+
     <!-- Assigned to Me panel -->
     <div id="panel-assigned" class="hidden">
       <div id="assigned-banner" class="assigned-banner hidden">
         📥 You have <strong id="assigned-count-text">0</strong> task(s) assigned to you. Complete them in order of priority.
+      </div>
+      <div class="tracking-update-callout">
+        <span class="tuc-icon">📋</span>
+        <span>To close an assigned task: <strong>1)</strong> Add tracking number (where required) &nbsp;→&nbsp; <strong>2)</strong> Send notification to customer &nbsp;→&nbsp; <strong>3)</strong> Click Complete</span>
       </div>
       <div class="table-wrap" id="assigned-table-wrap">
         <table class="data-table" id="assigned-table">
@@ -149,7 +433,23 @@
     </div>
   </div>
 
-</main>
+  <!-- COMING SOON PANEL -->
+  <div id="dash-coming-soon" class="hidden">
+    <div class="crm-coming-soon">
+      <div class="crm-coming-soon-icon">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      </div>
+      <h2 id="dash-cs-module">Coming Soon</h2>
+      <p>This module is under development and will be available in a future release.</p>
+      <button type="button" class="btn btn-primary" onclick="showDashNav('main')">← Back to Dashboard</button>
+    </div>
+  </div>
+
+
+    </main>
+
+  </div><!-- end main-content -->
+</div><!-- end app-layout -->
 
 <!-- ══════════════ MODAL: ADD/EDIT / ASSIGN ENTRY ══════════════ -->
 <div class="modal-overlay" id="entry-modal-overlay" data-ocid="dash.entry.modal">
@@ -239,7 +539,7 @@
           </div>
         </div>
 
-        <!-- Tracking field — hidden for PostCard/Gift -->
+        <!-- Tracking field — hidden for PostCard/Gift AND hidden for Assigner role -->
         <div class="form-row" id="tracking-field-wrap">
           <div class="form-group" style="flex:1">
             <label for="e-tracking">Tracking Number <span class="required" id="tracking-required-star">*</span></label>
@@ -304,10 +604,137 @@
   </div>
 </div>
 
+<!-- ══════════════ MODAL: UPDATE TRACKING NUMBER ══════════════ -->
+<div class="modal-overlay" id="tracking-modal-overlay" data-ocid="dash.tracking.modal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3>🚚 Update Tracking Number</h3>
+      <button type="button" class="modal-close" onclick="closeTrackingModal()" data-ocid="dash.tracking.modal.close_button">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:0.88rem;color:var(--text-muted);margin-bottom:16px">
+        Enter the tracking number for this order before sending the notification to the customer.
+      </p>
+      <div class="form-group">
+        <label for="tm-tracking">Tracking Number <span class="required">*</span></label>
+        <input type="text" id="tm-tracking" class="form-control" placeholder="e.g. IN123456789" data-ocid="dash.tracking.input" />
+        <div class="form-error" id="tm-tracking-err"></div>
+      </div>
+      <div class="form-group">
+        <label for="tm-dtype-display">Dispatch Type</label>
+        <input type="text" id="tm-dtype-display" class="form-control" readonly style="background:var(--surface2)" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-ghost" onclick="closeTrackingModal()" data-ocid="dash.tracking.modal.cancel_button">Cancel</button>
+      <button type="button" class="btn btn-primary" onclick="saveTrackingAndOpenEmail()" data-ocid="dash.tracking.modal.save_button">Save &amp; Send Notification</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══════════════ PRINT AREA ══════════════ -->
 <div class="print-area" id="print-area"></div>
 
 <div id="toast-container"></div>
+<!-- ══════════════ OVERDUE ALERT POPUP ══════════════ -->
+<div class="modal-overlay" id="overdue-popup-overlay" data-ocid="overdue.popup.modal" style="z-index:9999;display:none">
+  <div class="modal modal-lg" style="max-width:700px">
+    <div class="modal-header" style="background:linear-gradient(135deg,#c62828,#b71c1c);border-radius:var(--radius-sm) var(--radius-sm) 0 0">
+      <h3 style="color:#fff">⏰ Overdue Tasks — Action Required</h3>
+      <button type="button" class="modal-close" onclick="closeOverduePopup()" data-ocid="overdue.popup.close_button" style="color:#fff">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--text-muted);margin-bottom:16px;font-size:0.9rem">
+        The following tasks have been unattended for <strong>24+ hours</strong>. Any dispatcher can step in and complete them.
+      </p>
+      <div id="overdue-popup-list" style="max-height:340px;overflow-y:auto"></div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-ghost btn-sm" onclick="closeOverduePopup(false)" data-ocid="overdue.popup.cancel_button">Dismiss</button>
+      <button type="button" class="btn btn-primary" onclick="goToOverdueTab()" data-ocid="overdue.popup.primary_button">View All Overdue Tasks</button>
+    </div>
+  </div>
+</div>
+
+<!-- OCR IMAGE UPLOAD MODAL -->
+<div class="modal-overlay" id="ocr-modal-overlay" data-ocid="dash.ocr.modal">
+  <div class="modal modal-lg">
+    <div class="modal-header" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border-radius:12px 12px 0 0">
+      <h3 style="color:#fff">📷 Upload Image to Create Order</h3>
+      <button type="button" class="modal-close" onclick="closeImageOCRModal()" data-ocid="dash.ocr.modal.close_button" style="color:#fff">✕</button>
+    </div>
+    <div class="modal-body">
+      <!-- Step 1: Upload -->
+      <div id="ocr-step-upload">
+        <div id="ocr-dropzone" class="ocr-dropzone" onclick="document.getElementById('ocr-file-input').click()" data-ocid="dash.ocr.dropzone"
+             ondragover="event.preventDefault();this.classList.add('drag-over')"
+             ondragleave="this.classList.remove('drag-over')"
+             ondrop="handleOCRDrop(event)">
+          <div style="font-size:3rem;margin-bottom:8px">📄</div>
+          <p style="font-size:1.1rem;font-weight:600;margin:0 0 4px">Drop image here or click to browse</p>
+          <p style="font-size:0.85rem;color:var(--text-secondary);margin:0">Supports JPG, PNG, WEBP, GIF, BMP — photos of forms, ID cards, receipts, etc.</p>
+          <input type="file" id="ocr-file-input" accept="image/*" style="display:none" onchange="startOCR(this.files[0])" data-ocid="dash.ocr.upload_button" />
+        </div>
+      </div>
+
+      <!-- Step 2: Processing -->
+      <div id="ocr-step-processing" class="hidden" style="text-align:center;padding:40px 0">
+        <div style="font-size:3rem;margin-bottom:16px;animation:spin 1s linear infinite">⚙️</div>
+        <p style="font-size:1.1rem;font-weight:600" id="ocr-status-text">Reading image...</p>
+        <div style="width:100%;background:#e5e7eb;border-radius:999px;height:8px;margin:16px 0;overflow:hidden">
+          <div id="ocr-progress-bar" style="height:100%;background:linear-gradient(90deg,#6366f1,#8b5cf6);border-radius:999px;width:0%;transition:width 0.3s"></div>
+        </div>
+        <img id="ocr-preview-img" style="max-width:100%;max-height:200px;border-radius:8px;margin-top:8px;object-fit:contain;border:1px solid #e5e7eb" />
+      </div>
+
+      <!-- Step 3: Review extracted data -->
+      <div id="ocr-step-review" class="hidden">
+        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
+          <img id="ocr-review-img" style="max-width:240px;max-height:180px;border-radius:8px;object-fit:contain;border:1px solid #e5e7eb;flex-shrink:0" />
+          <div style="flex:1;min-width:220px">
+            <p style="font-weight:600;margin:0 0 4px;color:#6366f1">✅ Data extracted from image</p>
+            <p style="font-size:0.85rem;color:var(--text-secondary);margin:0 0 12px">Review and edit before creating the order. Fields marked in purple were auto-filled.</p>
+            <div style="background:#f3f4ff;border:1px solid #c7d2fe;border-radius:8px;padding:10px;font-size:0.82rem;max-height:120px;overflow-y:auto;font-family:monospace;white-space:pre-wrap" id="ocr-raw-text"></div>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Customer Name</label>
+            <input type="text" id="ocr-name" class="form-control" placeholder="Auto-extracted or enter manually" data-ocid="dash.ocr.name.input" />
+          </div>
+          <div class="form-group">
+            <label>Customer Email</label>
+            <input type="text" id="ocr-email" class="form-control" placeholder="Auto-extracted or enter manually" data-ocid="dash.ocr.email.input" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Phone / WhatsApp</label>
+            <input type="text" id="ocr-phone" class="form-control" placeholder="Auto-extracted or enter manually" data-ocid="dash.ocr.phone.input" />
+          </div>
+          <div class="form-group">
+            <label>Order / Reference ID</label>
+            <input type="text" id="ocr-orderid" class="form-control" placeholder="Auto-extracted or enter manually" data-ocid="dash.ocr.orderid.input" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Address</label>
+          <textarea id="ocr-address" class="form-control" rows="2" placeholder="Auto-extracted or enter manually" data-ocid="dash.ocr.address.textarea"></textarea>
+        </div>
+        <div class="form-group">
+          <label>Additional Notes (from image)</label>
+          <textarea id="ocr-notes" class="form-control" rows="2" placeholder="Any other info from the image" data-ocid="dash.ocr.notes.textarea"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer" id="ocr-modal-footer">
+      <button type="button" class="btn btn-ghost" onclick="closeImageOCRModal()" data-ocid="dash.ocr.modal.cancel_button">Cancel</button>
+      <button type="button" class="btn btn-accent" id="ocr-create-btn" onclick="createOrderFromOCR()" style="display:none" data-ocid="dash.ocr.modal.submit_button">Create Order from This Data →</button>
+    </div>
+  </div>
+</div>
+
+
 <script src="app.js"></script>
 <script>
 /* ── State ────────────────────────────────────────────────── */
@@ -315,6 +742,17 @@ var SESSION = null;
 var currentEmailEntryId = null;
 var editingEntryId = null;
 var currentDispatcherTab = 'my';
+var currentTrackingEntryId = null;
+
+/* ── Priority badge HTML helper (rich classes) ─────────────── */
+function richPriorityBadge(priority) {
+  var p = (priority || 'Normal').toLowerCase();
+  var cls = 'p-normal';
+  if (p === 'emergency') cls = 'p-emergency';
+  else if (p === 'urgent') cls = 'p-urgent';
+  else if (p === 'moderate') cls = 'p-moderate';
+  return '<span class="priority-badge ' + cls + '">' + escHtml(priority || 'Normal') + '</span>';
+}
 
 /* ── Init ─────────────────────────────────────────────────── */
 (function init() {
@@ -328,11 +766,31 @@ var currentDispatcherTab = 'my';
 
   populateFormDropdowns();
 
+  // Setup dispatch views in background
   if (SESSION.role === 'assigner') {
     setupAssignerView();
   } else {
     setupDispatcherView();
   }
+
+  // Show CRM home dashboard by default
+  var assView = document.getElementById('assigner-view');
+  var disView = document.getElementById('dispatcher-view');
+  var homeView = document.getElementById('crm-home-view');
+  if (assView) assView.classList.add('hidden');
+  if (disView) disView.classList.add('hidden');
+  if (homeView) homeView.classList.remove('hidden');
+  var titleEl = document.getElementById('dash-page-title');
+  if (titleEl) titleEl.textContent = 'Dashboard';
+  // Sidebar user info
+  var sidebarName = document.getElementById('sidebar-user-name');
+  var sidebarRole = document.getElementById('sidebar-user-role');
+  var sidebarAvatar = document.getElementById('sidebar-user-avatar');
+  if (sidebarName) sidebarName.textContent = SESSION.name;
+  if (sidebarRole) sidebarRole.textContent = SESSION.role.charAt(0).toUpperCase() + SESSION.role.slice(1);
+  if (sidebarAvatar) sidebarAvatar.textContent = SESSION.name.charAt(0).toUpperCase();
+  // Render CRM dashboard after short delay for DOM readiness
+  setTimeout(renderCrmDashboard, 100);
 })();
 
 /* ── Populate form dropdowns ──────────────────────────────── */
@@ -352,6 +810,11 @@ function populateFormDropdowns() {
 
 /* ── Dispatch type tracking rule ──────────────────────────── */
 function onDispatchTypeChange() {
+  // Assigner never sees the tracking field — dispatcher fills it after dispatch
+  if (SESSION && SESSION.role === 'assigner') {
+    document.getElementById('tracking-field-wrap').style.display = 'none';
+    return;
+  }
   var dtype = document.getElementById('e-dtype').value;
   var noTracking = NO_TRACKING_TYPES.includes(dtype);
   var wrap = document.getElementById('tracking-field-wrap');
@@ -390,6 +853,7 @@ function setupAssignerView() {
 
   loadAssignerStats();
   filterAssignerTasks();
+  setTimeout(function() { showOverduePopup(); handleQuickTaskLink(); }, 400);
 }
 
 function loadAssignerStats() {
@@ -429,20 +893,19 @@ function renderAssignerTable(tasks) {
   }
   empty.classList.add('hidden'); wrap.classList.remove('hidden');
 
-  var pColor;
   tbody.innerHTML = tasks.map(function(d, i) {
-    pColor = PRIORITY_COLORS[d.priority||'Normal'] || '#555';
     return '<tr id="arow-'+d.id+'" data-ocid="dash.assigner.row.'+(i+1)+'">' +
       '<td>'+escHtml(String(d.slNo))+'</td>' +
       '<td><strong>'+escHtml(d.customerName)+'</strong><br><span class="small text-muted">'+escHtml(d.customerEmail||d.customerPhone||'')+'</span></td>' +
       '<td><strong>'+escHtml(d.orderId)+'</strong></td>' +
       '<td>'+escHtml(d.dispatchType)+'</td>' +
-      '<td><span class="priority-badge" style="background:'+pColor+'">'+escHtml(d.priority||'Normal')+'</span></td>' +
+      '<td>'+richPriorityBadge(d.priority)+'</td>' +
       '<td>'+(d.assignedToName ? '<span class="badge badge-inprocess">'+escHtml(d.assignedToName)+'</span>' : '<span class="text-muted">Unassigned</span>')+'</td>' +
       '<td><span class="badge '+statusBadgeClass(d.status)+'">'+d.status+'</span></td>' +
       '<td>'+formatDate(d.createdAt)+'<br><span class="small text-muted">'+timeAgo(d.updatedAt)+'</span></td>' +
       '<td class="actions"><div class="table-actions">' +
         '<button type="button" class="btn btn-ghost btn-sm" onclick="openEmailModal(\''+d.id+'\')" data-ocid="dash.assigner.email_button.'+(i+1)+'" title="'+(d.emailSent?'Sent':'Notify')+'">📧'+(d.emailSent?'✓':'')+'</button>' +
+        '<button type="button" class="btn btn-ghost btn-sm" onclick="shareToWhatsAppGroup(\''+d.id+'\')" data-ocid="dash.assigner.whatsapp_button.'+(i+1)+'" title="Share to WhatsApp Group" style="background:#25d366;color:#fff;border-color:#25d366">📤 WA</button>' +
         (d.status !== 'Completed' ? '<button type="button" class="btn btn-ghost btn-sm" onclick="editEntry(\''+d.id+'\')" data-ocid="dash.assigner.edit_button.'+(i+1)+'">✏️</button>' : '') +
         (d.status !== 'Completed' ? '<button type="button" class="btn btn-danger btn-sm" onclick="deleteEntry(\''+d.id+'\')" data-ocid="dash.assigner.delete_button.'+(i+1)+'">🗑</button>' : '') +
       '</div></td></tr>';
@@ -494,9 +957,14 @@ function setupDispatcherView() {
   var websiteSel = document.getElementById('filter-website');
   WEBSITES.get().forEach(function(w) { var o=document.createElement('option'); o.value=w; o.textContent=w; websiteSel.appendChild(o); });
 
+  // Run escalation check on load — any 24h+ unactioned tasks get flagged
+  runEscalationCheck();
+
   loadDispatcherStats();
   filterEntries();
   filterAssignedTasks();
+  filterEscalatedTasks(); // pre-load badge count
+  setTimeout(function() { showOverduePopup(); handleQuickTaskLink(); }, 400);
 }
 
 function loadDispatcherStats() {
@@ -516,19 +984,29 @@ function loadDispatcherStats() {
   // Update tab badges
   var myTotal = all.length;
   var assignedTotal = asgn.length;
-  var myBadge = document.getElementById('my-count-badge');
+  var escalatedTotal = getDispatches().filter(function(d) { return d.escalated && d.status !== 'Completed'; }).length;
+  var myBadge  = document.getElementById('my-count-badge');
   var asnBadge = document.getElementById('assigned-count-badge');
-  if (myBadge) myBadge.textContent = myTotal;
+  var escBadge = document.getElementById('escalated-count-badge');
+  if (myBadge)  myBadge.textContent  = myTotal;
   if (asnBadge) asnBadge.textContent = assignedTotal;
+  if (escBadge) {
+    escBadge.textContent = escalatedTotal;
+    escBadge.style.display = escalatedTotal > 0 ? '' : 'none';
+    // Make tab label pulse if there are overdue tasks
+    var tabEsc = document.getElementById('tab-escalated');
+    if (tabEsc) tabEsc.classList.toggle('tab-escalated-alert', escalatedTotal > 0);
+  }
 }
 
 function switchDispatcherTab(tab) {
   currentDispatcherTab = tab;
-  document.getElementById('tab-my').classList.toggle('active', tab === 'my');
-  document.getElementById('tab-assigned').classList.toggle('active', tab === 'assigned');
-  document.getElementById('panel-my').classList.toggle('hidden', tab !== 'my');
-  document.getElementById('panel-assigned').classList.toggle('hidden', tab !== 'assigned');
-  if (tab === 'assigned') filterAssignedTasks();
+  ['my','assigned','escalated'].forEach(function(t) {
+    document.getElementById('tab-'+t).classList.toggle('active', tab === t);
+    document.getElementById('panel-'+t).classList.toggle('hidden', tab !== t);
+  });
+  if (tab === 'assigned')  filterAssignedTasks();
+  if (tab === 'escalated') filterEscalatedTasks();
 }
 
 /* ── My Entries ───────────────────────────────────────────── */
@@ -576,6 +1054,89 @@ function filterAssignedTasks() {
   renderTable(tasks, 'assigned-tbody', 'assigned-empty', 'assigned-table-wrap', true);
 }
 
+/* ── Escalated / Overdue Tasks (visible to ALL dispatchers) ── */
+function filterEscalatedTasks() {
+  // All escalated, open tasks in the system — any dispatcher can step in
+  var tasks = getDispatches().filter(function(d) { return d.escalated && d.status !== 'Completed'; });
+  tasks.sort(function(a,b) {
+    var pOrder = { Emergency:0, Urgent:1, Normal:2, Moderate:3 };
+    var pa = pOrder[a.priority||'Normal'] !== undefined ? pOrder[a.priority] : 99;
+    var pb = pOrder[b.priority||'Normal'] !== undefined ? pOrder[b.priority] : 99;
+    if (pa !== pb) return pa - pb;
+    return new Date(a.escalatedAt||a.updatedAt) - new Date(b.escalatedAt||b.updatedAt); // oldest first
+  });
+
+  var tbody = document.getElementById('escalated-tbody');
+  var empty = document.getElementById('escalated-empty');
+  var wrap  = document.getElementById('escalated-table-wrap');
+
+  if (!tasks.length) {
+    tbody.innerHTML = ''; empty.classList.remove('hidden'); wrap.classList.add('hidden'); return;
+  }
+  empty.classList.add('hidden'); wrap.classList.remove('hidden');
+
+  tbody.innerHTML = tasks.map(function(d, i) {
+    var noTracking = NO_TRACKING_TYPES.includes(d.dispatchType);
+    var hasTracking = noTracking || !!d.trackingNo;
+    var emailSent   = d.emailSent === true;
+    var isMine      = d.assignedTo === SESSION.userId;
+    var canComplete = hasTracking && emailSent;
+    var completeDisabled = !canComplete ? 'disabled' : '';
+
+    // Notify / tracking button
+    var notifyBtn;
+    if (!noTracking && !d.trackingNo) {
+      notifyBtn = '<button type="button" class="btn btn-ghost btn-sm" onclick="openTrackingModal(\''+d.id+'\')" data-ocid="dash.escalated.tracking_button.'+(i+1)+'" title="Add tracking number">🚚 Add Tracking</button>';
+    } else {
+      notifyBtn = '<button type="button" class="btn btn-ghost btn-sm" onclick="openEmailModal(\''+d.id+'\')" data-ocid="dash.escalated.email_button.'+(i+1)+'" title="'+(emailSent?'Notification sent':'Send notification')+'">📧'+(emailSent?'✓':'')+'</button>';
+    }
+
+    // How long overdue
+    var overdueMs = Date.now() - new Date(d.escalatedAt||d.createdAt).getTime();
+    var overdueHrs = Math.floor(overdueMs / 3600000);
+    var overdueLabel = overdueHrs < 24 ? overdueHrs+'h overdue' : Math.floor(overdueHrs/24)+'d overdue';
+
+    return '<tr id="escrow-'+d.id+'" class="escalated-row" data-ocid="dash.escalated.row.'+(i+1)+'">' +
+      '<td>'+escHtml(String(d.slNo))+'</td>' +
+      '<td><strong>'+escHtml(d.customerName)+'</strong><br><span class="small text-muted">'+escHtml(d.customerEmail||d.customerPhone||'')+'</span></td>' +
+      '<td><strong>'+escHtml(d.orderId)+'</strong></td>' +
+      '<td>'+escHtml(d.website)+'</td>' +
+      '<td>'+escHtml(d.dispatchType)+'</td>' +
+      '<td>'+(d.trackingNo ? '<code style="font-size:0.78rem;background:var(--surface2);padding:2px 6px;border-radius:4px">'+escHtml(d.trackingNo)+'</code>' : '<span class="text-muted" style="font-size:0.8rem">'+(noTracking?'N/A':'—')+'</span>')+'</td>' +
+      '<td>'+richPriorityBadge(d.priority)+'</td>' +
+      '<td><span class="badge badge-inprocess">'+escHtml(d.assignedToName||'—')+'</span>'+(isMine?'<br><span class="small text-muted">(you)</span>':'')+'</td>' +
+      '<td><span class="overdue-label">⏰ '+overdueLabel+'</span><br><span class="small text-muted">'+formatDate(d.escalatedAt||d.createdAt)+'</span></td>' +
+      '<td class="actions"><div class="table-actions">' +
+        notifyBtn +
+        '<button type="button" class="btn btn-success btn-sm" onclick="completeEscalatedEntry(\''+d.id+'\')" '+completeDisabled+' data-ocid="dash.escalated.complete_button.'+(i+1)+'" title="'+(canComplete?'Complete':'Add tracking + send notification first')+'" style="opacity:'+(canComplete?'1':'0.45')+'">✅ Complete</button>' +
+      '</div></td></tr>';
+  }).join('');
+}
+
+function completeEscalatedEntry(id) {
+  var entry = getDispatches().find(function(d) { return d.id === id; });
+  if (!entry) return;
+  var noTracking = NO_TRACKING_TYPES.includes(entry.dispatchType);
+  if (!noTracking && !entry.trackingNo) {
+    showToast('Please add the tracking number first.', 'warn'); return;
+  }
+  if (!entry.emailSent) {
+    showToast('Please send the customer notification first.', 'warn'); return;
+  }
+  confirmAction('Mark this overdue task as Completed?', function() {
+    updateDispatch(id, {
+      status: 'Completed',
+      takenOverBy: SESSION.userId,
+      takenOverByName: SESSION.name,
+      takenOverAt: new Date().toISOString(),
+    });
+    logActivity('takeover', SESSION.name+' completed overdue task '+entry.orderId, id, 'dispatch');
+    showToast('Task completed — great work stepping in!', 'success');
+    loadDispatcherStats();
+    filterEscalatedTasks();
+  }, 'Complete Overdue Task');
+}
+
 function renderTable(dispatches, tbodyId, emptyId, wrapId, isAssigned) {
   var tbody = document.getElementById(tbodyId);
   var empty = document.getElementById(emptyId);
@@ -586,33 +1147,57 @@ function renderTable(dispatches, tbodyId, emptyId, wrapId, isAssigned) {
   }
   empty.classList.add('hidden'); wrap.classList.remove('hidden');
 
-  var pColor;
   tbody.innerHTML = dispatches.map(function(d, i) {
     var isCompleted = d.status === 'Completed';
     var nextStatuses = STATUS_FLOW[d.status] || [d.status];
     var statusOpts = nextStatuses.map(function(s) { return '<option value="'+s+'"'+(d.status===s?' selected':'')+'>'+s+'</option>'; }).join('');
     var emailSent = d.emailSent === true;
-    var completeDisabled = !emailSent ? 'disabled title="Send notification first"' : '';
-    pColor = PRIORITY_COLORS[d.priority||'Normal'] || '#555';
+    var noTracking = NO_TRACKING_TYPES.includes(d.dispatchType);
+    var hasTracking = noTracking || !!d.trackingNo;
+    // For assigned tasks from assigner: dispatcher must set tracking + send email to complete
+    var canComplete = isAssigned ? (hasTracking && emailSent) : emailSent;
+    var completeDisabled = !canComplete ? 'disabled' : '';
+    var completeTitle = isAssigned
+      ? (!hasTracking ? 'Step 1: Update tracking number first' : !emailSent ? 'Step 2: Send notification to customer' : 'Complete this task')
+      : (!emailSent ? 'Send notification first to complete' : 'Complete this entry');
 
     var assignedByCell = isAssigned ? '<td><span class="badge badge-dispatched">'+escHtml(d.assignedByName||'—')+'</span></td>' : '';
 
+    // For assigned tasks show completion progress steps
+    var stepsHtml = '';
+    if (isAssigned && !isCompleted) {
+      stepsHtml = '<div class="complete-steps" style="margin-top:4px">' +
+        '<span class="complete-step '+(hasTracking?'done':'pending')+'" title="'+(noTracking?'No tracking needed':'Enter tracking number')+'">'+(noTracking?'No tracking needed':'Tracking #')+'</span>' +
+        '<span style="color:var(--text-light);font-size:0.8rem">→</span>' +
+        '<span class="complete-step '+(emailSent?'done':'pending')+'">Notified</span>' +
+        '</div>';
+    }
+
+    // Notify button: for assigned tasks without tracking, open tracking modal instead
+    var notifyBtn;
+    if (isAssigned && !noTracking && !d.trackingNo) {
+      notifyBtn = '<button type="button" class="btn btn-ghost btn-sm" onclick="openTrackingModal(\''+d.id+'\')" data-ocid="dash.entries.tracking_button.'+(i+1)+'" title="Update tracking number">🚚 Add Tracking</button>';
+    } else {
+      notifyBtn = '<button type="button" class="btn btn-ghost btn-sm" onclick="openEmailModal(\''+d.id+'\')" data-ocid="dash.entries.email_button.'+(i+1)+'" title="'+(emailSent?'Notification sent':'Send notification')+'">📧'+(emailSent?'✓':'')+'</button>';
+    }
+
     return '<tr id="row-'+d.id+'" data-ocid="dash.entries.row.'+(i+1)+'">' +
       '<td>'+escHtml(String(d.slNo))+'</td>' +
-      '<td><strong>'+escHtml(d.customerName)+'</strong>'+(d.nameType?'<br><span class="small text-muted">'+escHtml(d.nameType)+'</span>':'')+(d.notes?'<br><span class="small text-muted" title="'+escHtml(d.notes)+'">📝</span>':'')+'</td>' +
+      '<td><strong>'+escHtml(d.customerName)+'</strong>'+(d.nameType?'<br><span class="small text-muted">'+escHtml(d.nameType)+'</span>':'')+(stepsHtml)+(d.notes?'<span class="small text-muted" title="'+escHtml(d.notes)+'">📝</span>':'')+'</td>' +
       '<td><strong>'+escHtml(d.orderId)+'</strong></td>' +
       '<td>'+escHtml(d.website)+'</td>' +
       '<td>'+escHtml(d.dispatchType)+'</td>' +
-      '<td>'+escHtml(d.trackingNo||'—')+'</td>' +
-      '<td><span class="priority-badge" style="background:'+pColor+'">'+escHtml(d.priority||'Normal')+'</span></td>' +
+      '<td>'+(d.trackingNo ? '<code style="font-size:0.78rem;background:var(--surface2);padding:2px 6px;border-radius:4px">'+escHtml(d.trackingNo)+'</code>' : '<span class="text-muted" style="font-size:0.8rem">'+(noTracking?'N/A':'—')+'</span>')+'</td>' +
+      '<td>'+richPriorityBadge(d.priority)+'</td>' +
       assignedByCell +
       '<td>'+(isCompleted ? '<span class="badge badge-completed">Completed</span>' : '<select class="status-select" onchange="changeStatus(\''+d.id+'\',this.value)" data-ocid="dash.entries.status_select.'+(i+1)+'">'+statusOpts+'</select>')+'</td>' +
       '<td>'+formatDate(d.createdAt)+'<br><span class="small text-muted">'+timeAgo(d.updatedAt)+'</span></td>' +
       '<td class="actions"><div class="table-actions">' +
         (!isCompleted ? '<button type="button" class="btn btn-ghost btn-sm" onclick="editEntry(\''+d.id+'\')" data-ocid="dash.entries.edit_button.'+(i+1)+'">✏️</button>' : '') +
-        '<button type="button" class="btn btn-ghost btn-sm" onclick="openEmailModal(\''+d.id+'\')" data-ocid="dash.entries.email_button.'+(i+1)+'" title="'+(emailSent?'Notification sent':'Send notification')+'">📧'+(emailSent?'✓':'')+'</button>' +
+        notifyBtn +
         '<button type="button" class="btn btn-ghost btn-sm" onclick="printEntry(\''+d.id+'\')" data-ocid="dash.entries.print_button.'+(i+1)+'">🖨</button>' +
-        (!isCompleted ? '<button type="button" class="btn btn-primary btn-sm" onclick="completeEntry(\''+d.id+'\')" '+completeDisabled+' data-ocid="dash.entries.complete_button.'+(i+1)+'" style="opacity:'+(emailSent?'1':'0.4')+'">✅ Complete</button>' : '') +
+        '<button type="button" class="btn btn-ghost btn-sm" onclick="printLabel(\''+d.id+'\')" data-ocid="dash.entries.label_button.'+(i+1)+'" title="Print Shipping Label">🏷️</button>' +
+        (!isCompleted ? '<button type="button" class="btn btn-success btn-sm" onclick="completeEntry(\''+d.id+'\')" '+completeDisabled+' data-ocid="dash.entries.complete_button.'+(i+1)+'" title="'+escHtml(completeTitle)+'" style="opacity:'+(canComplete?'1':'0.45')+'">✅ Complete</button>' : '') +
         (!isCompleted ? '<button type="button" class="btn btn-danger btn-sm" onclick="deleteEntry(\''+d.id+'\')" data-ocid="dash.entries.delete_button.'+(i+1)+'">🗑</button>' : '') +
       '</div></td></tr>';
   }).join('');
@@ -684,7 +1269,12 @@ function clearEntryForm() {
   document.getElementById('e-nametype').value = '';
   document.getElementById('e-priority').value = '';
   document.getElementById('products-list').innerHTML = '';
-  document.getElementById('tracking-field-wrap').style.display = '';
+  // Assigner never sees tracking field; dispatcher sees it by default
+  if (SESSION && SESSION.role === 'assigner') {
+    document.getElementById('tracking-field-wrap').style.display = 'none';
+  } else {
+    document.getElementById('tracking-field-wrap').style.display = '';
+  }
   ['e-slno-err','e-name-err','e-orderid-err','e-website-err','e-dtype-err','e-tracking-err','e-dispatcher-err'].forEach(function(id) {
     var el = document.getElementById(id); if (el) el.textContent = '';
   });
@@ -741,9 +1331,10 @@ function saveEntry(statusOverride) {
   if (!website) { document.getElementById('e-website-err').textContent = 'Select a website'; valid = false; }
   if (!dtype)   { document.getElementById('e-dtype-err').textContent = 'Select dispatch type'; valid = false; }
 
-  // Tracking required unless Post Card / Gift
+  // Tracking required unless Post Card / Gift — and NEVER for Assigner role
   var noTracking = NO_TRACKING_TYPES.includes(dtype);
-  if (!noTracking && !tracking && statusOverride !== 'Draft') {
+  var isAssigner = SESSION && SESSION.role === 'assigner';
+  if (!isAssigner && !noTracking && !tracking && statusOverride !== 'Draft') {
     document.getElementById('e-tracking-err').textContent = 'Tracking number required for this dispatch type';
     valid = false;
   }
@@ -767,7 +1358,8 @@ function saveEntry(statusOverride) {
   var data = {
     slNo, customerName: name, nameType, address, orderId,
     website, dispatchType: dtype,
-    trackingNo: noTracking ? '' : tracking,
+    // Assigner doesn't set tracking — dispatcher fills it later
+    trackingNo: isAssigner ? '' : (noTracking ? '' : tracking),
     customerEmail: email, customerPhone: phone,
     products, notes, priority,
     status: statusOverride,
@@ -803,12 +1395,49 @@ function deleteEntry(id) {
 function completeEntry(id) {
   var entry = getDispatches().find(function(d) { return d.id === id; });
   if (!entry) return;
-  if (!entry.emailSent) { showToast('Please send the notification first before completing.', 'warn'); return; }
+  var noTracking = NO_TRACKING_TYPES.includes(entry.dispatchType);
+  var isAssigned = !!(entry.assignedTo);
+  // For assigned tasks (from assigner): need tracking + email
+  // For own entries: just need email
+  if (isAssigned && !noTracking && !entry.trackingNo) {
+    showToast('Please update the tracking number first.', 'warn'); return;
+  }
+  if (!entry.emailSent) { showToast('Please send the notification to the customer first.', 'warn'); return; }
   confirmAction('Mark this entry as Completed? This cannot be undone.', function() {
     updateDispatchStatus(id, 'Completed');
     showToast('Entry marked as Completed', 'success');
     refreshCurrentView();
   }, 'Complete Entry');
+}
+
+/* ── Tracking Modal ───────────────────────────────────────── */
+function openTrackingModal(id) {
+  var entry = getDispatches().find(function(d) { return d.id === id; });
+  if (!entry) return;
+  currentTrackingEntryId = id;
+  document.getElementById('tm-tracking').value     = entry.trackingNo || '';
+  document.getElementById('tm-dtype-display').value = entry.dispatchType;
+  document.getElementById('tm-tracking-err').textContent = '';
+  document.getElementById('tracking-modal-overlay').classList.add('open');
+}
+function closeTrackingModal() {
+  document.getElementById('tracking-modal-overlay').classList.remove('open');
+  currentTrackingEntryId = null;
+}
+function saveTrackingAndOpenEmail() {
+  var tracking = document.getElementById('tm-tracking').value.trim();
+  if (!tracking) {
+    document.getElementById('tm-tracking-err').textContent = 'Tracking number is required';
+    return;
+  }
+  if (!currentTrackingEntryId) return;
+  updateDispatch(currentTrackingEntryId, { trackingNo: tracking });
+  showToast('Tracking number saved', 'success');
+  var savedId = currentTrackingEntryId;
+  closeTrackingModal();
+  refreshCurrentView();
+  // Open email/notification modal straight away
+  openEmailModal(savedId);
 }
 
 /* ── Email / WhatsApp Modal ───────────────────────────────── */
@@ -874,6 +1503,426 @@ function printEntry(id) {
     (entry.notes ? '<div class="print-row"><label>Notes:</label><span>'+escHtml(entry.notes)+'</span></div>' : '') +
     '</div>';
   window.print();
+}
+
+
+/* ══════════════════════════════════════════════════
+   PRINT SHIPPING LABEL (4.5cm × 10cm thermal)
+══════════════════════════════════════════════════ */
+function printLabel(id) {
+  var entry = getDispatches().find(function(d) { return d.id === id; });
+  if (!entry) return;
+  var labelWin = window.open('', '_blank', 'width=500,height=350');
+  if (!labelWin) { alert('Please allow popups for this page to print labels.'); return; }
+  var name    = escHtml(entry.customerName || '—');
+  var address = escHtml(entry.address || '—');
+  var phone   = escHtml(entry.customerPhone || '—');
+  var email   = escHtml(entry.customerEmail || '—');
+  var orderId = escHtml(entry.orderId || '—');
+  labelWin.document.write(
+    '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Shipping Label</title>' +
+    '<style>' +
+    '  @page { size: 100mm 45mm; margin: 0; }' +
+    '  * { box-sizing: border-box; margin: 0; padding: 0; }' +
+    '  body { width: 100mm; height: 45mm; font-family: Arial, sans-serif; font-size: 9pt; color: #000; background: #fff; }' +
+    '  .label { width: 100mm; height: 45mm; padding: 3mm 3mm 2mm 3mm; display: flex; flex-direction: column; justify-content: space-between; border: 1px solid #000; }' +
+    '  .label-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #000; padding-bottom: 1.5mm; margin-bottom: 1.5mm; }' +
+    '  .label-header .org { font-size: 7pt; font-weight: bold; color: #1a237e; }' +
+    '  .label-header .order { font-size: 7pt; color: #555; }' +
+    '  .label-body { flex: 1; display: flex; flex-direction: column; gap: 1mm; }' +
+    '  .lrow { display: flex; gap: 1.5mm; align-items: flex-start; line-height: 1.3; }' +
+    '  .lrow .lkey { font-size: 7pt; font-weight: bold; min-width: 14mm; color: #333; white-space: nowrap; }' +
+    '  .lrow .lval { font-size: 8.5pt; font-weight: normal; word-break: break-word; }' +
+    '  .lrow.name-row .lval { font-size: 9.5pt; font-weight: bold; }' +
+    '  @media print {' +
+    '    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }' +
+    '  }' +
+    '</style>' +
+    '</head><body>' +
+    '<div class="label">' +
+    '  <div class="label-header">' +
+    '    <span class="org">Vyoma Linguistic Labs Foundation</span>' +
+    '    <span class="order">Order: ' + orderId + '</span>' +
+    '  </div>' +
+    '  <div class="label-body">' +
+    '    <div class="lrow name-row"><span class="lkey">Name:</span><span class="lval">' + name + '</span></div>' +
+    '    <div class="lrow"><span class="lkey">Address:</span><span class="lval">' + address + '</span></div>' +
+    '    <div class="lrow"><span class="lkey">Mobile:</span><span class="lval">' + phone + '</span></div>' +
+    '    <div class="lrow"><span class="lkey">Email:</span><span class="lval">' + email + '</span></div>' +
+    '  </div>' +
+    '</div>' +
+    '<script>window.onload=function(){window.print();window.onafterprint=function(){window.close();};};<\/script>' +
+    '</body></html>'
+  );
+  labelWin.document.close();
+}
+
+/* ══════════════════════════════════════════════════
+   OVERDUE POPUP
+══════════════════════════════════════════════════ */
+function showOverduePopup() {
+  var overdueTasks = getDispatches().filter(function(d) { return d.escalated && d.status !== 'Completed'; });
+  if (!overdueTasks.length) return;
+
+  // Check if dismissed today
+  var lastDismissed = localStorage.getItem('overdue_popup_dismissed');
+  if (lastDismissed) {
+    var lastDate = new Date(lastDismissed).toDateString();
+    if (lastDate === new Date().toDateString()) return;
+  }
+
+  // Sort oldest first
+  overdueTasks.sort(function(a,b) { return new Date(a.escalatedAt||a.createdAt) - new Date(b.escalatedAt||b.createdAt); });
+
+  var listHtml = overdueTasks.slice(0, 10).map(function(d) {
+    var overdueMs  = Date.now() - new Date(d.escalatedAt||d.createdAt).getTime();
+    var overdueHrs = Math.floor(overdueMs / 3600000);
+    var overdueLabel = overdueHrs < 24 ? overdueHrs+'h overdue' : Math.floor(overdueHrs/24)+'d overdue';
+    var priorityCls  = {emergency:'p-emergency',urgent:'p-urgent',moderate:'p-moderate',normal:'p-normal'}[(d.priority||'Normal').toLowerCase()] || 'p-normal';
+    return '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface2);border-radius:6px;margin-bottom:8px;border-left:3px solid #c62828">' +
+      '<span class="priority-badge '+priorityCls+'" style="flex-shrink:0">'+escHtml(d.priority||'Normal')+'</span>' +
+      '<div style="flex:1;min-width:0">' +
+        '<strong style="font-size:0.9rem">'+escHtml(d.customerName)+'</strong>' +
+        '<span style="color:var(--text-muted);font-size:0.78rem;margin-left:8px">'+escHtml(d.orderId)+'</span><br>' +
+        '<span style="font-size:0.78rem;color:var(--text-muted)">Assigned to: '+escHtml(d.assignedToName||'Unassigned')+'</span>' +
+      '</div>' +
+      '<span style="background:#ffebee;color:#c62828;border-radius:12px;padding:2px 10px;font-size:0.75rem;font-weight:700;white-space:nowrap">⏰ '+overdueLabel+'</span>' +
+    '</div>';
+  }).join('');
+
+  if (overdueTasks.length > 10) {
+    listHtml += '<p style="text-align:center;color:var(--text-muted);font-size:0.82rem;margin-top:8px">...and '+(overdueTasks.length-10)+' more overdue tasks</p>';
+  }
+
+  document.getElementById('overdue-popup-list').innerHTML = listHtml;
+  var overlay = document.getElementById('overdue-popup-overlay');
+  overlay.style.display = 'flex';
+  requestAnimationFrame(function() { overlay.classList.add('open'); });
+}
+
+function closeOverduePopup(dismissForToday) {
+  if (dismissForToday !== false) {
+    localStorage.setItem('overdue_popup_dismissed', new Date().toISOString());
+  }
+  var overlay = document.getElementById('overdue-popup-overlay');
+  overlay.classList.remove('open');
+  setTimeout(function() { overlay.style.display = 'none'; }, 300);
+}
+
+function goToOverdueTab() {
+  closeOverduePopup(false);
+  if (SESSION && SESSION.role === 'dispatcher') {
+    switchDispatcherTab('escalated');
+    document.getElementById('tab-escalated').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   WHATSAPP GROUP SHARE (for Assigners)
+══════════════════════════════════════════════════ */
+function shareToWhatsAppGroup(id) {
+  var d = getDispatches().find(function(x) { return x.id === id; });
+  if (!d) return;
+
+  // Build magic update link — opens dashboard with ?quicktask=ID pre-highlighted
+  var baseUrl = window.location.href.split('?')[0];
+  var magicLink = baseUrl + '?quicktask=' + id;
+
+  var prods = (d.products || []).filter(function(p) { return p.name; });
+  var prodLine = prods.length ? prods.map(function(p) { return p.name + (p.qty > 1 ? ' x'+p.qty : ''); }).join(', ') : '—';
+
+  var overdueMs  = Date.now() - new Date(d.escalatedAt||d.assignedAt||d.createdAt).getTime();
+  var overdueHrs = Math.floor(overdueMs / 3600000);
+  var overdueTag = d.escalated ? ' ⏰ OVERDUE '+overdueHrs+'h' : '';
+
+  var msg =
+    '📋 *Task Update Required*'+overdueTag+'\n' +
+    '━━━━━━━━━━━━━━━━━━━\n' +
+    '👤 Customer: ' + (d.customerName||'—') + '\n' +
+    '🔢 Order ID: ' + (d.orderId||'—') + '\n' +
+    '📦 Products: ' + prodLine + '\n' +
+    '🚚 Dispatch Type: ' + (d.dispatchType||'—') + '\n' +
+    '🔴 Priority: ' + (d.priority||'Normal') + '\n' +
+    '👷 Assigned To: ' + (d.assignedToName||'Unassigned') + '\n' +
+    '📊 Status: ' + (d.status||'—') + '\n' +
+    '━━━━━━━━━━━━━━━━━━━\n' +
+    '🔗 Quick Update Link:\n' + magicLink + '\n' +
+    '\n_Click the link to open the task directly in the app._';
+
+  var url = 'https://wa.me/?text=' + encodeURIComponent(msg);
+  window.open(url, '_blank');
+}
+
+/* Handle ?quicktask=ID on page load — highlight and scroll to that task */
+function handleQuickTaskLink() {
+  var params = new URLSearchParams(window.location.search);
+  var taskId = params.get('quicktask');
+  if (!taskId) return;
+  // Clean URL
+  window.history.replaceState({}, '', window.location.pathname);
+  // After view is set up, scroll to the task
+  setTimeout(function() {
+    var el = document.getElementById('arow-'+taskId) || document.getElementById('row-'+taskId) || document.getElementById('escrow-'+taskId);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.style.outline = '3px solid var(--accent)';
+      el.style.background = 'var(--accent-light, #fff8e1)';
+      setTimeout(function() { el.style.outline = ''; el.style.background = ''; }, 3000);
+      showToast('Task highlighted — scroll up to see it', 'info');
+    } else {
+      // Switch to assigned tab and try again
+      if (SESSION && SESSION.role === 'dispatcher') {
+        switchDispatcherTab('assigned');
+        setTimeout(function() {
+          var el2 = document.getElementById('arow-'+taskId) || document.querySelector('[data-taskid="'+taskId+'"]');
+          if (el2) { el2.scrollIntoView({ behavior:'smooth', block:'center' }); el2.style.outline='3px solid var(--accent)'; setTimeout(function(){el2.style.outline='';},3000); }
+        }, 200);
+      }
+    }
+  }, 600);
+}
+
+</script>
+
+<script>
+/* ── CRM Sidebar helpers (dashboard) ──────────────────────── */
+function toggleSidebarCollapse() {
+  var sidebar = document.getElementById('sidebar');
+  var btn = document.getElementById('sidebar-collapse-btn');
+  sidebar.classList.toggle('collapsed');
+  btn.style.transform = sidebar.classList.contains('collapsed') ? 'rotate(180deg)' : '';
+}
+
+function showDashNav(section) {
+  document.querySelectorAll('#sidebar .nav-item').forEach(function(el) { el.classList.remove('active'); });
+  var navEl = document.getElementById('dash-nav-' + section);
+  if (navEl) navEl.classList.add('active');
+  var assView = document.getElementById('assigner-view');
+  var disView = document.getElementById('dispatcher-view');
+  var csView = document.getElementById('dash-coming-soon');
+  var homeView = document.getElementById('crm-home-view');
+  if (csView) csView.classList.add('hidden');
+  var titleEl = document.getElementById('dash-page-title');
+
+  if (section === 'main') {
+    if (assView) assView.classList.add('hidden');
+    if (disView) disView.classList.add('hidden');
+    if (homeView) homeView.classList.remove('hidden');
+    if (titleEl) titleEl.textContent = 'Dashboard';
+    renderCrmDashboard();
+    return;
+  }
+
+  if (homeView) homeView.classList.add('hidden');
+
+  if (section === 'dispatches') {
+    var role = SESSION && SESSION.role;
+    if (role === 'assigner') {
+      if (assView) assView.classList.remove('hidden');
+      if (disView) disView.classList.add('hidden');
+      if (titleEl) titleEl.textContent = 'Task Assignment';
+    } else {
+      if (disView) disView.classList.remove('hidden');
+      if (assView) assView.classList.add('hidden');
+      if (titleEl) titleEl.textContent = 'My Dispatch Entries';
+    }
+  }
+}
+
+
+/* ── CRM Dashboard Renderer ──────────────────────────────── */
+var _crmCharts = {};
+
+function renderCrmDashboard() {
+  var dispatches = getDispatches();
+  var now = Date.now();
+
+  // Welcome + date
+  var hour = new Date().getHours();
+  var greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  var wEl = document.getElementById('crm-welcome-msg');
+  if (wEl && SESSION) wEl.textContent = greet + ', ' + SESSION.name + '!';
+  var dEl = document.getElementById('crm-today-date');
+  if (dEl) dEl.textContent = new Date().toLocaleDateString('en-IN', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+
+  // Count by status
+  var counts = { Draft:0, 'In Process':0, Dispatched:0, Delivered:0, Completed:0 };
+  var overdueCount = 0;
+  dispatches.forEach(function(d) {
+    if (counts[d.status] !== undefined) counts[d.status]++;
+    if (d.escalated && d.status !== 'Completed') overdueCount++;
+  });
+  var total = dispatches.length;
+
+  // KPI cards
+  document.getElementById('kpi-total').textContent = total;
+  document.getElementById('kpi-inprocess').textContent = counts['In Process'];
+  document.getElementById('kpi-dispatched').textContent = counts['Dispatched'];
+  document.getElementById('kpi-completed').textContent = counts['Completed'];
+  document.getElementById('kpi-overdue').textContent = overdueCount;
+
+  // Pipeline bars
+  var stages = ['draft','inprocess','dispatched','delivered','completed'];
+  var stageKeys = ['Draft','In Process','Dispatched','Delivered','Completed'];
+  var maxCount = Math.max(1, ...Object.values(counts));
+  stages.forEach(function(s, i) {
+    var key = stageKeys[i];
+    var bar = document.getElementById('pipe-' + s + '-bar');
+    var cnt = document.getElementById('pipe-' + s + '-count');
+    if (bar) {
+      var pct = Math.max(4, Math.round((counts[key] / maxCount) * 100));
+      bar.style.height = pct + 'px';
+    }
+    if (cnt) cnt.textContent = counts[key];
+  });
+
+  // Pipeline progress bar
+  var progEl = document.getElementById('crm-pipeline-progress');
+  if (progEl && total > 0) {
+    var pColors = ['#9e9e9e','#1976d2','#f57c00','#388e3c','#2e7d32'];
+    progEl.innerHTML = stageKeys.map(function(k, i) {
+      var pct = Math.round((counts[k] / total) * 100);
+      if (pct === 0) return '';
+      return '<div title="' + k + ': ' + counts[k] + '" style="width:' + pct + '%;background:' + pColors[i] + ';height:8px;border-radius:4px;margin-right:2px;display:inline-block;transition:width 0.5s" ></div>';
+    }).join('');
+  }
+
+  // Priority donut chart
+  var priCounts = { Emergency:0, Urgent:0, Normal:0, Moderate:0 };
+  dispatches.forEach(function(d) { if (priCounts[d.priority] !== undefined) priCounts[d.priority]++; });
+  var priCtx = document.getElementById('crm-priority-chart');
+  if (priCtx) {
+    if (_crmCharts.priority) { _crmCharts.priority.destroy(); }
+    _crmCharts.priority = new Chart(priCtx, {
+      type: 'doughnut',
+      data: {
+        labels: ['Emergency','Urgent','Normal','Moderate'],
+        datasets: [{
+          data: [priCounts.Emergency, priCounts.Urgent, priCounts.Normal, priCounts.Moderate],
+          backgroundColor: ['#c62828','#f57c00','#1565c0','#2e7d32'],
+          borderWidth: 2,
+          borderColor: 'var(--surface)',
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 12, padding: 8, color: 'var(--text)' } } },
+        cutout: '65%',
+      }
+    });
+  }
+
+  // Daily trend chart (last 7 days)
+  var trendCtx = document.getElementById('crm-trend-chart');
+  if (trendCtx) {
+    var days = [];
+    var dayCounts = [];
+    for (var i = 6; i >= 0; i--) {
+      var d = new Date();
+      d.setDate(d.getDate() - i);
+      var label = d.toLocaleDateString('en-IN', { day:'2-digit', month:'short' });
+      days.push(label);
+      var dateStr = d.toISOString().split('T')[0];
+      var cnt2 = dispatches.filter(function(dd) { return (dd.createdAt||'').startsWith(dateStr); }).length;
+      dayCounts.push(cnt2);
+    }
+    if (_crmCharts.trend) { _crmCharts.trend.destroy(); }
+    _crmCharts.trend = new Chart(trendCtx, {
+      type: 'bar',
+      data: {
+        labels: days,
+        datasets: [{
+          label: 'Dispatches',
+          data: dayCounts,
+          backgroundColor: 'rgba(25,118,210,0.7)',
+          borderColor: '#1976d2',
+          borderWidth: 1,
+          borderRadius: 4,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { beginAtZero: true, ticks: { stepSize: 1, color: 'var(--text-muted)', font: { size: 11 } }, grid: { color: 'rgba(0,0,0,0.05)' } },
+          x: { ticks: { color: 'var(--text-muted)', font: { size: 11 } }, grid: { display: false } },
+        }
+      }
+    });
+  }
+
+  // Recent dispatches
+  var recentEl = document.getElementById('crm-recent-list');
+  if (recentEl) {
+    var sorted = dispatches.slice().sort(function(a,b) { return new Date(b.createdAt) - new Date(a.createdAt); }).slice(0, 7);
+    if (!sorted.length) {
+      recentEl.innerHTML = '<div class="crm-empty-msg">No dispatches yet</div>';
+    } else {
+      recentEl.innerHTML = sorted.map(function(d) {
+        var pColor = PRIORITY_COLORS[d.priority] || '#555';
+        return '<div class="crm-recent-item">' +
+          '<div class="crm-recent-dot" style="background:' + pColor + '"></div>' +
+          '<div class="crm-recent-info">' +
+            '<div class="crm-recent-name">' + escHtml(d.customerName) + ' <span class="crm-recent-order">#' + escHtml(d.orderId) + '</span></div>' +
+            '<div class="crm-recent-meta">' + escHtml(d.dispatchType || '') + ' · ' + timeAgo(d.createdAt) + '</div>' +
+          '</div>' +
+          '<span class="badge ' + statusBadgeClass(d.status) + '" style="font-size:0.7rem;flex-shrink:0">' + escHtml(d.status) + '</span>' +
+        '</div>';
+      }).join('');
+    }
+  }
+
+  // Top dispatchers
+  var tdEl = document.getElementById('crm-top-dispatchers');
+  if (tdEl) {
+    var byUser = {};
+    dispatches.forEach(function(d) {
+      var uname = d.createdByName || d.assignedToName || 'Unknown';
+      if (!byUser[uname]) byUser[uname] = { total: 0, completed: 0 };
+      byUser[uname].total++;
+      if (d.status === 'Completed') byUser[uname].completed++;
+    });
+    var userList = Object.keys(byUser).map(function(k) { return { name: k, ...byUser[k] }; });
+    userList.sort(function(a,b) { return b.completed - a.completed; });
+    var top5 = userList.slice(0, 5);
+    if (!top5.length) {
+      tdEl.innerHTML = '<div class="crm-empty-msg">No data yet</div>';
+    } else {
+      var maxComp = Math.max(1, top5[0].completed);
+      tdEl.innerHTML = top5.map(function(u, i) {
+        var pct = Math.round((u.completed / Math.max(1, u.total)) * 100);
+        var initials = u.name.split(' ').map(function(n){ return n[0]; }).join('').slice(0,2).toUpperCase();
+        return '<div class="crm-td-row">' +
+          '<div class="crm-td-rank">' + (i+1) + '</div>' +
+          '<div class="crm-td-avatar">' + initials + '</div>' +
+          '<div class="crm-td-info">' +
+            '<div class="crm-td-name">' + escHtml(u.name) + '</div>' +
+            '<div class="crm-td-bar-wrap"><div class="crm-td-bar" style="width:' + Math.round((u.total/Math.max(1,top5[0].total))*100) + '%"></div></div>' +
+          '</div>' +
+          '<div class="crm-td-stats">' +
+            '<span class="crm-td-completed">' + u.completed + '</span>' +
+            '<span class="crm-td-slash">/</span>' +
+            '<span class="crm-td-total">' + u.total + '</span>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+  }
+}
+
+function showDashComingSoon(module) {
+  document.querySelectorAll('#sidebar .nav-item').forEach(function(el) { el.classList.remove('active'); });
+  if (event && event.currentTarget) event.currentTarget.classList.add('active');
+  var assView = document.getElementById('assigner-view');
+  var disView = document.getElementById('dispatcher-view');
+  var csView = document.getElementById('dash-coming-soon');
+  if (assView) assView.classList.add('hidden');
+  if (disView) disView.classList.add('hidden');
+  if (csView) csView.classList.remove('hidden');
+  var csModule = document.getElementById('dash-cs-module');
+  if (csModule) csModule.textContent = module;
+  var titleEl = document.getElementById('dash-page-title');
+  if (titleEl) titleEl.textContent = module;
 }
 </script>
 </body>

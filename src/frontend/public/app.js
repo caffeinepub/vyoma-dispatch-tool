@@ -257,6 +257,9 @@ function createDispatch(data, session) {
     assignedToName:  data.assignedToName || null,
     assignedBy:      data.assignedBy || null,
     assignedByName:  data.assignedByName || null,
+    assignedAt:      data.assignedTo ? new Date().toISOString() : null,
+    escalated:       false,
+    escalatedAt:     null,
     emailSent:       false,
     emailSentAt:     null,
     createdBy:       session.userId,
@@ -651,8 +654,216 @@ function parseBulkImportFile(file, assignedTo, assignedToName, session, onDone) 
   reader.readAsBinaryString(file);
 }
 
+/* ── Auto-Escalation ───────────────────────────────────────── */
+const ESCALATION_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+/**
+ * Run on every page load for dispatchers.
+ * Any task that is:
+ *   - assigned to a specific dispatcher (assignedTo is set)
+ *   - NOT yet completed
+ *   - has NOT been escalated yet
+ *   - was assigned more than 24 hours ago
+ * gets flagged as escalated = true so ALL dispatchers can see and act on it.
+ */
+function runEscalationCheck() {
+  const dispatches = getDispatches();
+  let changed = false;
+  const now = Date.now();
+
+  dispatches.forEach(function(d) {
+    if (d.escalated) return;                   // already escalated
+    if (d.status === 'Completed') return;      // already done
+    if (!d.assignedTo) return;                 // not an assigned task
+    const assignedAt = new Date(d.assignedAt || d.createdAt).getTime();
+    if (now - assignedAt >= ESCALATION_THRESHOLD_MS) {
+      d.escalated    = true;
+      d.escalatedAt  = new Date().toISOString();
+      d.updatedAt    = new Date().toISOString();
+      changed = true;
+      logActivity('escalate',
+        `Task ${d.orderId} auto-escalated after 24h — visible to all dispatchers`,
+        d.id, 'dispatch', 'system', 'System');
+    }
+  });
+
+  if (changed) saveDispatches(dispatches);
+  return changed;
+}
+
 /* ── Auto-init ─────────────────────────────────────────────── */
 (function init() {
   seedAdmin();
   initDarkMode();
 })();
+
+/* ── OCR Image Upload Feature ──────────────────────────────── */
+function openImageOCRModal() {
+  resetOCRModal();
+  document.getElementById('ocr-modal-overlay').classList.add('open');
+}
+
+function closeImageOCRModal() {
+  document.getElementById('ocr-modal-overlay').classList.remove('open');
+}
+
+function resetOCRModal() {
+  document.getElementById('ocr-step-upload').classList.remove('hidden');
+  document.getElementById('ocr-step-processing').classList.add('hidden');
+  document.getElementById('ocr-step-review').classList.add('hidden');
+  document.getElementById('ocr-create-btn').style.display = 'none';
+  document.getElementById('ocr-file-input').value = '';
+  ['ocr-name','ocr-email','ocr-phone','ocr-orderid','ocr-address','ocr-notes'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(el){ el.value = ''; el.classList.remove('ocr-field-filled'); }
+  });
+}
+
+function handleOCRDrop(e) {
+  e.preventDefault();
+  document.getElementById('ocr-dropzone').classList.remove('drag-over');
+  var files = e.dataTransfer.files;
+  if (files && files[0] && files[0].type.startsWith('image/')) {
+    startOCR(files[0]);
+  } else {
+    showToast('Please drop an image file (JPG, PNG, etc.)', 'error');
+  }
+}
+
+function startOCR(file) {
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var imgSrc = e.target.result;
+    document.getElementById('ocr-preview-img').src = imgSrc;
+    document.getElementById('ocr-review-img').src = imgSrc;
+    document.getElementById('ocr-step-upload').classList.add('hidden');
+    document.getElementById('ocr-step-processing').classList.remove('hidden');
+    document.getElementById('ocr-status-text').textContent = 'Reading image...';
+    document.getElementById('ocr-progress-bar').style.width = '0%';
+
+    if (typeof Tesseract === 'undefined') {
+      showToast('OCR library not loaded. Check internet connection.', 'error');
+      resetOCRModal();
+      return;
+    }
+
+    Tesseract.recognize(imgSrc, 'eng', {
+      logger: function(m) {
+        if (m.status === 'recognizing text') {
+          var pct = Math.round((m.progress || 0) * 100);
+          document.getElementById('ocr-progress-bar').style.width = pct + '%';
+          document.getElementById('ocr-status-text').textContent = 'Reading image... ' + pct + '%';
+        }
+      }
+    }).then(function(result) {
+      var text = result.data.text || '';
+      document.getElementById('ocr-step-processing').classList.add('hidden');
+      document.getElementById('ocr-step-review').classList.remove('hidden');
+      document.getElementById('ocr-create-btn').style.display = '';
+      document.getElementById('ocr-raw-text').textContent = text.trim() || '(No text detected)';
+      fillOCRFields(text);
+    }).catch(function(err) {
+      console.error('OCR error', err);
+      showToast('Could not read image. Try a clearer photo.', 'error');
+      resetOCRModal();
+    });
+  };
+  reader.readAsDataURL(file);
+}
+
+function fillOCRFields(text) {
+  var lines = text.split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
+  var lower = text.toLowerCase();
+
+  // Email
+  var emailMatch = text.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/);
+  setOCRField('ocr-email', emailMatch ? emailMatch[0] : '');
+
+  // Phone (10+ digits, optional separators)
+  var phoneMatch = text.match(/(?:\+?91[\s\-]?)?[6-9]\d{9}|\+?[\d][\d\s\-\(\)]{9,14}\d/);
+  setOCRField('ocr-phone', phoneMatch ? phoneMatch[0].replace(/\s/g,'') : '');
+
+  // Order ID (patterns like ORD-xxx, #xxx, Order No: xxx, ID: xxx)
+  var orderMatch = text.match(/(?:order\s*(?:id|no|number|#)[:\s#]*|#\s*)([A-Z0-9\-]{4,20})/i)
+                || text.match(/\b(ORD[-\/]?[A-Z0-9\-]{3,15})\b/i)
+                || text.match(/\bID[:\s]+([A-Z0-9\-]{4,20})\b/i);
+  setOCRField('ocr-orderid', orderMatch ? orderMatch[1].trim() : '');
+
+  // Name (look for "Name:", "Customer:", "To:", then use first non-empty non-label line)
+  var nameMatch = text.match(/(?:name|customer|to|attn|recipient)[:\s]+([A-Za-z][A-Za-z\s\.]{2,40})/i);
+  if (!nameMatch) {
+    // Try first line that looks like a proper name (2 words, mostly alpha)
+    for (var i = 0; i < Math.min(lines.length, 8); i++) {
+      var l = lines[i];
+      if (/^[A-Z][a-zA-Z\s\.]{4,40}$/.test(l) && l.split(' ').length >= 2) {
+        nameMatch = [null, l];
+        break;
+      }
+    }
+  }
+  setOCRField('ocr-name', nameMatch ? nameMatch[1].trim() : '');
+
+  // Address (look for address-like block: contains pin/zip, street keywords)
+  var addrMatch = text.match(/(?:address|addr|ship\s*to|deliver\s*to)[:\s]+([^\n]{5,}(?:\n[^\n]{5,}){0,3})/i);
+  if (!addrMatch) {
+    // Try to find pin code line and grab surrounding lines
+    var pinIdx = lines.findIndex(function(l){ return /\b\d{6}\b/.test(l) || /\b\d{5}(?:[-\s]\d{4})?\b/.test(l); });
+    if (pinIdx >= 0) {
+      var start = Math.max(0, pinIdx - 2);
+      var end = Math.min(lines.length, pinIdx + 2);
+      addrMatch = [null, lines.slice(start, end).join(', ')];
+    }
+  }
+  setOCRField('ocr-address', addrMatch ? addrMatch[1].replace(/\n/g,', ').trim() : '');
+
+  // Notes: remaining non-empty lines not already captured
+  var captured = [
+    document.getElementById('ocr-email').value,
+    document.getElementById('ocr-phone').value,
+    document.getElementById('ocr-orderid').value,
+    document.getElementById('ocr-name').value
+  ].filter(Boolean).map(function(v){ return v.toLowerCase(); });
+
+  var notesLines = lines.filter(function(l){
+    if (l.length < 4) return false;
+    var ll = l.toLowerCase();
+    return !captured.some(function(c){ return ll.includes(c) || c.includes(ll); });
+  });
+  setOCRField('ocr-notes', notesLines.slice(0, 6).join(' | '));
+}
+
+function setOCRField(id, value) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.value = value || '';
+  if (value) el.classList.add('ocr-field-filled');
+  else el.classList.remove('ocr-field-filled');
+}
+
+function createOrderFromOCR() {
+  var name    = (document.getElementById('ocr-name').value || '').trim();
+  var email   = (document.getElementById('ocr-email').value || '').trim();
+  var phone   = (document.getElementById('ocr-phone').value || '').trim();
+  var orderid = (document.getElementById('ocr-orderid').value || '').trim();
+  var address = (document.getElementById('ocr-address').value || '').trim();
+  var notes   = (document.getElementById('ocr-notes').value || '').trim();
+
+  closeImageOCRModal();
+  openEntryModal();   // opens blank entry modal
+
+  // Fill in the entry modal fields after a tick (to let modal render)
+  setTimeout(function() {
+    if (name)    { var n=document.getElementById('e-name');    if(n) n.value=name; }
+    if (email)   { var e=document.getElementById('e-email');   if(e) e.value=email; }
+    if (phone)   { var p=document.getElementById('e-phone');   if(p) p.value=phone; }
+    if (orderid) { var o=document.getElementById('e-orderid'); if(o) o.value=orderid; }
+    if (address) { var a=document.getElementById('e-address'); if(a) a.value=address; }
+    if (notes)   {
+      // Append notes to address or set in address if empty
+      var addrEl = document.getElementById('e-address');
+      if (addrEl && !addrEl.value && notes) addrEl.value = notes;
+    }
+    showToast('Form pre-filled from image. Review and save.', 'success');
+  }, 150);
+}

@@ -6,6 +6,11 @@
   <title>Login — Vyoma Linguistic Labs Foundation</title>
   <link rel="stylesheet" href="styles.css" />
   <style>
+    /* Suppress ALL browser native validation marks */
+    input:invalid { box-shadow: none !important; outline: none !important; }
+    input:-moz-submit-invalid { box-shadow: none !important; }
+    input:-moz-ui-invalid { box-shadow: none !important; }
+
     .login-page { position: relative; overflow: hidden; }
     .login-page::before {
       content: '';
@@ -49,7 +54,6 @@
 </head>
 <body>
 <div class="login-page" id="login-page">
-  <!-- Dark mode toggle top-right -->
   <button type="button" class="dark-toggle" onclick="toggleDarkMode()" style="position:absolute;top:18px;right:20px;z-index:10" title="Toggle dark mode" data-ocid="login.toggle">🌙</button>
 
   <div class="login-card" style="position:relative;z-index:1">
@@ -67,13 +71,12 @@
       <div class="form-group">
         <label for="email">Email Address <span class="required">*</span></label>
         <input
-          type="email"
+          type="text"
           id="email"
           class="form-control"
           placeholder="Enter your email"
           autocomplete="username"
           data-ocid="login.email.input"
-          required
         />
         <div class="form-error" id="email-error"></div>
       </div>
@@ -88,7 +91,6 @@
             placeholder="Enter your password"
             autocomplete="current-password"
             data-ocid="login.password.input"
-            required
           />
           <button type="button" class="pw-toggle" id="pw-toggle" title="Show/hide password">👁️</button>
         </div>
@@ -112,23 +114,19 @@
 <script src="app.js"></script>
 <script>
 (function() {
-  // Check if already logged in
   const session = getSession();
   if (session) {
     if (session.role === 'admin') { window.location.href = 'admin.html'; return; }
     else { window.location.href = 'dashboard.html'; return; }
   }
 
-  // Show timeout banner if redirected from timeout
   const params = new URLSearchParams(window.location.search);
   if (params.get('timeout') === '1') {
     document.getElementById('timeout-banner').classList.remove('hidden');
   }
 
-  // Dark mode toggle
   updateDarkToggle();
 
-  // Password toggle
   const pwInput = document.getElementById('password');
   const pwToggle = document.getElementById('pw-toggle');
   pwToggle.addEventListener('click', function() {
@@ -136,7 +134,6 @@
     else { pwInput.type = 'password'; pwToggle.textContent = '👁️'; }
   });
 
-  // Form submit
   const form = document.getElementById('login-form');
   const loginBtn = document.getElementById('login-btn');
 
@@ -155,7 +152,6 @@
     loginBtn.classList.add('btn-loading');
     loginBtn.disabled = true;
 
-    // Simulate slight delay for UX
     setTimeout(function() {
       const result = login(email, password);
       loginBtn.classList.remove('btn-loading');
@@ -169,10 +165,10 @@
       }
 
       showToast('Welcome back, ' + result.session.name + '!', 'success');
-        setTimeout(function() {
-          if (result.session.role === 'admin') window.location.href = 'admin.html';
-          else window.location.href = 'dashboard.html'; // dispatcher, assigner, viewer
-        }, 600);
+      setTimeout(function() {
+        if (result.session.role === 'admin') window.location.href = 'admin.html';
+        else window.location.href = 'dashboard.html';
+      }, 600);
     }, 500);
   });
 
