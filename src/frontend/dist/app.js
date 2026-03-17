@@ -13,6 +13,7 @@ const KEYS = {
   activity:   'vyoma_activity',
   darkMode:   'vyoma_dark',
   settings:   'vyoma_settings',
+  contacts:   'vyoma_contacts',
 };
 
 const ADMIN_SEED = {
@@ -126,6 +127,8 @@ const getUsers       = () => store.get(KEYS.users);
 const saveUsers      = (u) => store.set(KEYS.users, u);
 const getDispatches  = () => store.get(KEYS.dispatches);
 const saveDispatches = (d) => store.set(KEYS.dispatches, d);
+const getContacts    = () => store.get(KEYS.contacts);
+const saveContacts   = (c) => store.set(KEYS.contacts, c);
 const getActivity    = () => store.get(KEYS.activity);
 const saveActivity   = (a) => store.set(KEYS.activity, a);
 const getSession     = () => store.getObj(KEYS.session);
@@ -236,6 +239,44 @@ function getNextSlNo(userId) {
   return max + 1;
 }
 
+function upsertContact(dispatch) {
+  var contacts = getContacts();
+  if (!contacts) contacts = [];
+  // Use email as unique key, fallback to phone, fallback to name
+  var key = (dispatch.customerEmail || '').trim().toLowerCase() || (dispatch.customerPhone || '').trim() || (dispatch.customerName || '').trim().toLowerCase();
+  if (!key) return;
+  var idx = contacts.findIndex(function(c) {
+    var ck = (c.email || '').trim().toLowerCase() || (c.phone || '').trim() || (c.name || '').trim().toLowerCase();
+    return ck === key;
+  });
+  var orderRef = { orderId: dispatch.orderId, id: dispatch.id, createdAt: dispatch.createdAt, status: dispatch.status };
+  if (idx === -1) {
+    contacts.push({
+      id: 'c_' + genId(),
+      name: dispatch.customerName || '',
+      email: dispatch.customerEmail || '',
+      phone: dispatch.customerPhone || '',
+      address: dispatch.address || '',
+      orders: [orderRef],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+  } else {
+    var c = contacts[idx];
+    c.name = dispatch.customerName || c.name;
+    c.email = dispatch.customerEmail || c.email;
+    c.phone = dispatch.customerPhone || c.phone;
+    c.address = dispatch.address || c.address;
+    if (!c.orders) c.orders = [];
+    var oIdx = c.orders.findIndex(function(o) { return o.id === dispatch.id; });
+    if (oIdx === -1) c.orders.push(orderRef);
+    else c.orders[oIdx] = orderRef;
+    c.updatedAt = new Date().toISOString();
+  }
+  saveContacts(contacts);
+}
+
+
 function createDispatch(data, session) {
   const dispatches = getDispatches();
   const newEntry = {
@@ -270,6 +311,7 @@ function createDispatch(data, session) {
   };
   dispatches.push(newEntry);
   saveDispatches(dispatches);
+  upsertContact(newEntry);
   logActivity('create', `Created dispatch entry for ${newEntry.customerName} (${newEntry.orderId})`, newEntry.id, 'dispatch');
   return newEntry;
 }
@@ -281,6 +323,7 @@ function updateDispatch(id, data) {
   const old = dispatches[idx];
   dispatches[idx] = { ...old, ...data, id: old.id, updatedAt: new Date().toISOString() };
   saveDispatches(dispatches);
+  upsertContact(dispatches[idx]);
   logActivity('update', `Updated dispatch ${dispatches[idx].orderId}`, id, 'dispatch');
   return dispatches[idx];
 }

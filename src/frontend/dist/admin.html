@@ -183,7 +183,11 @@
       <section id="tab-team" class="fade-in hidden">
         <div class="page-header">
           <h2>Team Members</h2>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <button type="button" class="btn btn-accent" onclick="openTeamModal()" data-ocid="admin.team.add.open_modal_button">+ Add Team Member</button>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="exportUsers()" data-ocid="admin.team.export.button" title="Export users to JSON file for use on other devices/environments">⬇ Export Users</button>
+          <label class="btn btn-ghost btn-sm" style="cursor:pointer;margin:0" title="Import users from JSON file exported from another environment">⬆ Import Users<input type="file" id="import-users-file" accept=".json" style="display:none" onchange="importUsers(this)"></label>
+        </div>
         </div>
         <div class="table-wrap">
           <table class="data-table" id="team-table">
@@ -835,6 +839,46 @@ function removeTeamMember(id) {
   }, 'Remove Team Member');
 }
 
+
+function exportUsers() {
+  var users = getUsers().filter(function(u) { return u.role !== "admin"; });
+  if (!users.length) { showToast("No dispatcher/assigner accounts to export.", "warn"); return; }
+  var data = JSON.stringify({ vyoma_users_export: true, users: users, exportedAt: new Date().toISOString() }, null, 2);
+  var blob = new Blob([data], { type: "application/json" });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a");
+  a.href = url; a.download = "vyoma_users_" + new Date().toISOString().slice(0,10) + ".json"; a.click();
+  URL.revokeObjectURL(url);
+  showToast("Exported " + users.length + " user(s). Import this file on your live environment.", "success");
+}
+
+function importUsers(input) {
+  var file = input.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var data = JSON.parse(e.target.result);
+      if (!data.vyoma_users_export || !Array.isArray(data.users)) {
+        showToast("Invalid file. Please use a file exported from this app.", "error"); return;
+      }
+      var existing = getUsers();
+      var added = 0; var skipped = 0;
+      data.users.forEach(function(u) {
+        if (!u.id || !u.username || !u.role) { skipped++; return; }
+        var already = existing.some(function(e) { return e.id === u.id || (e.username && e.username === u.username); });
+        if (already) { skipped++; return; }
+        existing.push(u);
+        added++;
+      });
+      saveUsers(existing);
+      input.value = "";
+      showToast("Imported " + added + " user(s). " + (skipped ? skipped + " skipped (already exist)." : ""), "success");
+      loadTeam();
+    } catch(err) { showToast("Failed to read file: " + err.message, "error"); }
+  };
+  reader.readAsText(file);
+}
 /* ══════════════════════════════════════════════════
    TAB: ALL DISPATCHES
 ══════════════════════════════════════════════════ */

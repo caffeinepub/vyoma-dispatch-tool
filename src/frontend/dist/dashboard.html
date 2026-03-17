@@ -89,12 +89,11 @@
           </span>
           <span class="nav-label">Dispatches</span>
         </div>
-        <div class="nav-item nav-item-soon" onclick="showDashComingSoon('Contacts')" data-ocid="dash.nav.contacts">
+        <div class="nav-item" id="dash-nav-contacts" onclick="showDashNav('contacts')" data-ocid="dash.nav.contacts">
           <span class="nav-icon">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           </span>
           <span class="nav-label">Contacts</span>
-          <span class="nav-soon-badge">Soon</span>
         </div>
       </div>
     </nav>
@@ -457,6 +456,91 @@
     </div>
   </div>
 
+
+
+  <!-- CONTACTS VIEW -->
+  <div id="contacts-view" class="hidden">
+    <div style="padding:1.5rem">
+      <!-- Header -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.2rem;flex-wrap:wrap;gap:0.75rem">
+        <div>
+          <h2 style="margin:0;font-size:1.4rem;font-weight:700">Contacts</h2>
+          <p style="margin:0.2rem 0 0;color:var(--text-muted);font-size:0.88rem">Customer records auto-saved from orders</p>
+        </div>
+        <div style="display:flex;gap:0.6rem;align-items:center;flex-wrap:wrap">
+          <input type="text" id="contacts-search" placeholder="Search by name, email, phone..." oninput="renderContactsList()"
+            style="padding:0.45rem 0.9rem;border:1px solid var(--border);border-radius:8px;font-size:0.88rem;background:var(--bg);color:var(--text);width:240px" />
+          <span id="contacts-count-badge" style="background:var(--accent);color:#fff;padding:0.25rem 0.7rem;border-radius:20px;font-size:0.82rem;font-weight:600"></span>
+        </div>
+      </div>
+
+      <!-- Contacts Table -->
+      <div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);overflow:hidden">
+        <table style="width:100%;border-collapse:collapse;font-size:0.88rem">
+          <thead>
+            <tr style="background:var(--sidebar-bg);border-bottom:1px solid var(--border)">
+              <th style="padding:0.75rem 1rem;text-align:left;font-weight:600;color:var(--text-muted)">#</th>
+              <th style="padding:0.75rem 1rem;text-align:left;font-weight:600">Name</th>
+              <th style="padding:0.75rem 1rem;text-align:left;font-weight:600">Email</th>
+              <th style="padding:0.75rem 1rem;text-align:left;font-weight:600">Phone</th>
+              <th style="padding:0.75rem 1rem;text-align:left;font-weight:600">Address</th>
+              <th style="padding:0.75rem 1rem;text-align:center;font-weight:600">Orders</th>
+              <th style="padding:0.75rem 1rem;text-align:left;font-weight:600">Last Updated</th>
+              <th style="padding:0.75rem 1rem;text-align:center;font-weight:600">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="contacts-tbody">
+            <tr><td colspan="8" style="text-align:center;padding:2.5rem;color:var(--text-muted)">No contacts yet. Contacts are auto-saved when orders are created.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Contact Detail Modal -->
+  <div id="contact-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeContactModal()">
+    <div class="modal-box" style="max-width:580px;width:95%">
+      <div class="modal-header">
+        <h3 id="contact-modal-title" class="modal-title">Contact Details</h3>
+        <button type="button" class="modal-close" onclick="closeContactModal()">✕</button>
+      </div>
+      <div class="modal-body" id="contact-modal-body"></div>
+      <div class="modal-footer" style="gap:0.6rem;flex-wrap:wrap" id="contact-modal-footer"></div>
+    </div>
+  </div>
+
+  <!-- Edit Contact Modal -->
+  <div id="edit-contact-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeEditContactModal()">
+    <div class="modal-box" style="max-width:480px;width:95%">
+      <div class="modal-header">
+        <h3 class="modal-title">Edit Contact</h3>
+        <button type="button" class="modal-close" onclick="closeEditContactModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="edit-contact-id" />
+        <div class="form-group">
+          <label class="form-label">Name</label>
+          <input type="text" id="edit-contact-name" class="form-control" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="text" id="edit-contact-email" class="form-control" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Phone</label>
+          <input type="text" id="edit-contact-phone" class="form-control" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Address</label>
+          <textarea id="edit-contact-address" class="form-control" rows="3"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeEditContactModal()">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="saveContactEdit()">Save Changes</button>
+      </div>
+    </div>
+  </div>
 
     </main>
 
@@ -1583,7 +1667,8 @@ function printLabel(id) {
     '  .label-right { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 22mm; border-left: 1px solid #ccc; padding-left: 2mm; }' +
     '  .label-header { border-bottom: 1px solid #000; padding-bottom: 1mm; margin-bottom: 1mm; }' +
     '  .label-header .org { font-size: 7pt; font-weight: bold; color: #1a237e; display:block; }' +
-    '  .label-header .order { font-size: 6.5pt; color: #555; }' +
+    '  .label-header .order { font-size: 6.5pt; color: #555; display:block; }' +
+    '  .label-header .to-label { font-size: 9pt; font-weight: bold; color: #000; display:block; margin-top: 1mm; letter-spacing: 0.5px; }' +
     '  .label-body { flex: 1; display: flex; flex-direction: column; gap: 0.8mm; }' +
     '  .lrow { display: flex; gap: 1.5mm; align-items: flex-start; line-height: 1.3; }' +
     '  .lrow .lkey { font-size: 6.5pt; font-weight: bold; min-width: 13mm; color: #333; white-space: nowrap; }' +
@@ -1600,6 +1685,7 @@ function printLabel(id) {
     '    <div class="label-header">' +
     '      <span class="org">Vyoma Linguistic Labs Foundation</span>' +
     '      <span class="order">Order: ' + orderId + '</span>' +
+    '      <span class="to-label">TO</span>' +
     '    </div>' +
     '    <div class="label-body">' +
     '      <div class="lrow name-row"><span class="lkey">Name:</span><span class="lval">' + name + '</span></div>' +
@@ -1774,6 +1860,8 @@ function showDashNav(section) {
   var csView = document.getElementById('dash-coming-soon');
   var homeView = document.getElementById('crm-home-view');
   if (csView) csView.classList.add('hidden');
+  var conView2 = document.getElementById('contacts-view');
+  if (conView2) conView2.classList.add('hidden');
   var titleEl = document.getElementById('dash-page-title');
 
   if (section === 'main') {
@@ -1798,6 +1886,13 @@ function showDashNav(section) {
       if (assView) assView.classList.add('hidden');
       if (titleEl) titleEl.textContent = 'My Dispatch Entries';
     }
+  }
+
+  if (section === 'contacts') {
+    var conView = document.getElementById('contacts-view');
+    if (conView) conView.classList.remove('hidden');
+    if (titleEl) titleEl.textContent = 'Contacts';
+    renderContactsList();
   }
 }
 
@@ -2062,6 +2157,162 @@ function barcodeCompleteTask(id) {
     loadDispatcherView();
   }, 'Complete Task');
 }
+
+/* ── Contacts Module ─────────────────────────────────────── */
+
+function renderContactsList() {
+  var contacts = getContacts() || [];
+  var q = (document.getElementById('contacts-search') || {}).value || '';
+  q = q.trim().toLowerCase();
+  var filtered = contacts;
+  if (q) {
+    filtered = contacts.filter(function(c) {
+      return (c.name||'').toLowerCase().includes(q) ||
+             (c.email||'').toLowerCase().includes(q) ||
+             (c.phone||'').includes(q);
+    });
+  }
+  var badge = document.getElementById('contacts-count-badge');
+  if (badge) badge.textContent = filtered.length + ' Contact' + (filtered.length !== 1 ? 's' : '');
+  var tbody = document.getElementById('contacts-tbody');
+  if (!tbody) return;
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:2.5rem;color:var(--text-muted)">No contacts found.</td></tr>';
+    return;
+  }
+  var isAdmin = SESSION && SESSION.role === 'admin';
+  tbody.innerHTML = filtered.map(function(c, i) {
+    var orders = c.orders || [];
+    var lastDate = c.updatedAt ? new Date(c.updatedAt).toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'numeric'}) : '-';
+    return '<tr style="border-bottom:1px solid var(--border);transition:background 0.15s" onmouseover="this.style.background='var(--sidebar-bg)'" onmouseout="this.style.background=''">' +
+      '<td style="padding:0.7rem 1rem;color:var(--text-muted)">' + (i+1) + '</td>' +
+      '<td style="padding:0.7rem 1rem;font-weight:600">' + escHtml(c.name || '-') + '</td>' +
+      '<td style="padding:0.7rem 1rem">' + escHtml(c.email || '-') + '</td>' +
+      '<td style="padding:0.7rem 1rem">' + escHtml(c.phone || '-') + '</td>' +
+      '<td style="padding:0.7rem 1rem;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + escHtml(c.address||'') + '">' + escHtml(c.address || '-') + '</td>' +
+      '<td style="padding:0.7rem 1rem;text-align:center"><span style="background:var(--accent);color:#fff;padding:0.2rem 0.6rem;border-radius:12px;font-size:0.8rem;font-weight:600">' + orders.length + '</span></td>' +
+      '<td style="padding:0.7rem 1rem;color:var(--text-muted);font-size:0.83rem">' + lastDate + '</td>' +
+      '<td style="padding:0.7rem 1rem;text-align:center">' +
+        '<button type="button" onclick="viewContact('' + c.id + '')" style="background:var(--accent);color:#fff;border:none;border-radius:6px;padding:0.3rem 0.65rem;font-size:0.8rem;cursor:pointer;margin-right:4px" title="View">👁</button>' +
+        '<button type="button" onclick="openEditContact('' + c.id + '')" style="background:#f59e0b;color:#fff;border:none;border-radius:6px;padding:0.3rem 0.65rem;font-size:0.8rem;cursor:pointer;margin-right:4px" title="Edit">✏️</button>' +
+        (isAdmin ? '<button type="button" onclick="deleteContactById('' + c.id + '')" style="background:#ef4444;color:#fff;border:none;border-radius:6px;padding:0.3rem 0.65rem;font-size:0.8rem;cursor:pointer" title="Delete">🗑</button>' : '') +
+      '</td>' +
+      '</tr>';
+  }).join('');
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function viewContact(cid) {
+  var contacts = getContacts() || [];
+  var c = contacts.find(function(x) { return x.id === cid; });
+  if (!c) return;
+  var orders = c.orders || [];
+  var dispatches = getDispatches() || [];
+  var isAdmin = SESSION && SESSION.role === 'admin';
+
+  var ordersHtml = orders.length ? orders.map(function(o) {
+    var d = dispatches.find(function(dd) { return dd.id === o.id; });
+    var statusColor = {Draft:'#94a3b8','In Process':'#3b82f6',Dispatched:'#f59e0b',Delivered:'#8b5cf6',Completed:'#10b981'}[d && d.status] || '#64748b';
+    return '<tr style="border-bottom:1px solid var(--border)">' +
+      '<td style="padding:0.5rem 0.7rem">' + escHtml(o.orderId || '-') + '</td>' +
+      '<td style="padding:0.5rem 0.7rem"><span style="background:' + statusColor + ';color:#fff;padding:0.15rem 0.5rem;border-radius:10px;font-size:0.78rem">' + escHtml((d && d.status) || o.status || '-') + '</span></td>' +
+      '<td style="padding:0.5rem 0.7rem;font-size:0.82rem;color:var(--text-muted)">' + (o.createdAt ? new Date(o.createdAt).toLocaleDateString('en-IN') : '-') + '</td>' +
+      '</tr>';
+  }).join('') : '<tr><td colspan="3" style="padding:1rem;text-align:center;color:var(--text-muted)">No orders yet</td></tr>';
+
+  var body = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-bottom:1rem">' +
+    '<div><label style="font-size:0.78rem;color:var(--text-muted);text-transform:uppercase;font-weight:600">Name</label><div style="margin-top:0.2rem;font-weight:600">' + escHtml(c.name||'-') + '</div></div>' +
+    '<div><label style="font-size:0.78rem;color:var(--text-muted);text-transform:uppercase;font-weight:600">Email</label><div style="margin-top:0.2rem">' + escHtml(c.email||'-') + '</div></div>' +
+    '<div><label style="font-size:0.78rem;color:var(--text-muted);text-transform:uppercase;font-weight:600">Phone</label><div style="margin-top:0.2rem">' + escHtml(c.phone||'-') + '</div></div>' +
+    '<div><label style="font-size:0.78rem;color:var(--text-muted);text-transform:uppercase;font-weight:600">Address</label><div style="margin-top:0.2rem">' + escHtml(c.address||'-') + '</div></div>' +
+    '</div>' +
+    '<div style="margin-top:0.5rem"><label style="font-size:0.78rem;color:var(--text-muted);text-transform:uppercase;font-weight:600;display:block;margin-bottom:0.5rem">Order History (' + orders.length + ')</label>' +
+    '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;border:1px solid var(--border);border-radius:8px;overflow:hidden">' +
+    '<thead><tr style="background:var(--sidebar-bg)"><th style="padding:0.5rem 0.7rem;text-align:left">Order ID</th><th style="padding:0.5rem 0.7rem;text-align:left">Status</th><th style="padding:0.5rem 0.7rem;text-align:left">Date</th></tr></thead>' +
+    '<tbody>' + ordersHtml + '</tbody></table></div>';
+
+  document.getElementById('contact-modal-title').textContent = c.name || 'Contact Details';
+  document.getElementById('contact-modal-body').innerHTML = body;
+
+  var footer = document.getElementById('contact-modal-footer');
+  var role = SESSION && SESSION.role;
+  footer.innerHTML = '<button type="button" class="btn btn-secondary" onclick="closeContactModal()">Close</button>' +
+    '<button type="button" class="btn btn-accent" onclick="closeContactModal();openEditContact('' + cid + '')">✏️ Edit</button>' +
+    '<button type="button" class="btn btn-primary" onclick="closeContactModal();createOrderFromContactId('' + cid + '')">+ New Order</button>' +
+    (role === 'admin' ? '<button type="button" class="btn btn-danger" onclick="deleteContactById('' + cid + '')">🗑 Delete</button>' : '');
+
+  document.getElementById('contact-modal').classList.remove('hidden');
+}
+
+function closeContactModal() {
+  document.getElementById('contact-modal').classList.add('hidden');
+}
+
+function openEditContact(cid) {
+  var contacts = getContacts() || [];
+  var c = contacts.find(function(x) { return x.id === cid; });
+  if (!c) return;
+  document.getElementById('edit-contact-id').value = cid;
+  document.getElementById('edit-contact-name').value = c.name || '';
+  document.getElementById('edit-contact-email').value = c.email || '';
+  document.getElementById('edit-contact-phone').value = c.phone || '';
+  document.getElementById('edit-contact-address').value = c.address || '';
+  document.getElementById('edit-contact-modal').classList.remove('hidden');
+}
+
+function closeEditContactModal() {
+  document.getElementById('edit-contact-modal').classList.add('hidden');
+}
+
+function saveContactEdit() {
+  var cid = document.getElementById('edit-contact-id').value;
+  var contacts = getContacts() || [];
+  var idx = contacts.findIndex(function(x) { return x.id === cid; });
+  if (idx === -1) return;
+  contacts[idx].name = document.getElementById('edit-contact-name').value.trim();
+  contacts[idx].email = document.getElementById('edit-contact-email').value.trim();
+  contacts[idx].phone = document.getElementById('edit-contact-phone').value.trim();
+  contacts[idx].address = document.getElementById('edit-contact-address').value.trim();
+  contacts[idx].updatedAt = new Date().toISOString();
+  saveContacts(contacts);
+  closeEditContactModal();
+  renderContactsList();
+  showToast && showToast('Contact updated successfully', 'success');
+}
+
+function deleteContactById(cid) {
+  if (SESSION && SESSION.role !== 'admin') { showToast && showToast('Only Super Admin can delete contacts', 'error'); return; }
+  if (!confirm('Are you sure you want to delete this contact? This cannot be undone.')) return;
+  var contacts = (getContacts() || []).filter(function(c) { return c.id !== cid; });
+  saveContacts(contacts);
+  closeContactModal();
+  renderContactsList();
+  showToast && showToast('Contact deleted', 'success');
+}
+
+function createOrderFromContactId(cid) {
+  var contacts = getContacts() || [];
+  var c = contacts.find(function(x) { return x.id === cid; });
+  if (!c) return;
+  showDashNav('dispatches');
+  setTimeout(function() {
+    openEntryModal && openEntryModal();
+    setTimeout(function() {
+      var nm = document.getElementById('field-customer-name');
+      var em = document.getElementById('field-customer-email');
+      var ph = document.getElementById('field-customer-phone');
+      var ad = document.getElementById('field-address');
+      if (nm) nm.value = c.name || '';
+      if (em) em.value = c.email || '';
+      if (ph) ph.value = c.phone || '';
+      if (ad) ad.value = c.address || '';
+    }, 150);
+  }, 200);
+}
+
 
 function showDashComingSoon(module) {
   document.querySelectorAll('#sidebar .nav-item').forEach(function(el) { el.classList.remove('active'); });
