@@ -411,11 +411,17 @@
             <div class="form-error" id="tm-name-err"></div>
           </div>
           <div class="form-group">
-            <label for="tm-email">Email <span class="required">*</span></label>
-            <input type="email" id="tm-email" class="form-control" placeholder="email@example.com" data-ocid="admin.team.email.input" />
-            <div class="form-error" id="tm-email-err"></div>
+            <label for="tm-username">Username <span class="required">*</span></label>
+            <input type="text" id="tm-username" class="form-control" placeholder="e.g. ravi.kumar" data-ocid="admin.team.username.input" autocomplete="off" />
+            <div class="form-error" id="tm-username-err"></div>
           </div>
         </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="tm-email">Email (optional)</label>
+            <input type="text" id="tm-email" class="form-control" placeholder="email@example.com" data-ocid="admin.team.email.input" />
+            <div class="form-error" id="tm-email-err"></div>
+          </div>
         <div class="form-row">
           <div class="form-group">
             <label for="tm-password">Password <span class="required">*</span></label>
@@ -731,7 +737,7 @@ function loadTeam() {
   document.getElementById('team-table').classList.remove('hidden');
   var roleBadge = { dispatcher:'badge-inprocess', assigner:'badge-delivered', viewer:'badge-draft' };
   tbody.innerHTML = users.map(function(u, i) {
-    return '<tr data-ocid="admin.team.row.' + (i+1) + '"><td>' + (i+1) + '</td><td><strong>' + escHtml(u.name) + '</strong></td><td>' + escHtml(u.email) + '</td>' +
+    return '<tr data-ocid="admin.team.row.' + (i+1) + '"><td>' + (i+1) + '</td><td><strong>' + escHtml(u.name) + '</strong></td><td><code>' + escHtml(u.username || u.email) + '</code></td>' +
       '<td><span class="badge ' + (roleBadge[u.role]||'badge-draft') + '">' + escHtml(u.role) + '</span></td>' +
       '<td><span class="badge badge-' + u.status + '">' + u.status + '</span></td>' +
       '<td>' + formatDate(u.dateAdded) + '</td>' +
@@ -752,7 +758,8 @@ function openTeamModal(prefillId) {
     if (u) {
       document.getElementById('tm-id').value       = u.id;
       document.getElementById('tm-name').value     = u.name;
-      document.getElementById('tm-email').value    = u.email;
+      document.getElementById('tm-username').value = u.username || '';
+      document.getElementById('tm-email').value    = u.email || '';
       document.getElementById('tm-password').value = u.password;
       document.getElementById('tm-role').value     = u.role;
       document.getElementById('tm-status').value   = u.status;
@@ -764,7 +771,7 @@ function closeTeamModal() { document.getElementById('team-modal-overlay').classL
 function editTeamMember(id) { openTeamModal(id); }
 
 function clearTeamForm() {
-  ['tm-id','tm-name','tm-email','tm-password'].forEach(function(id) { document.getElementById(id).value = ''; });
+  ['tm-id','tm-name','tm-username','tm-email','tm-password'].forEach(function(id) { document.getElementById(id).value = ''; });
   document.getElementById('tm-role').value = 'dispatcher';
   document.getElementById('tm-status').value = 'active';
   ['tm-name-err','tm-email-err','tm-password-err'].forEach(function(id) { document.getElementById(id).textContent = ''; });
@@ -774,34 +781,43 @@ function saveTeamMember() {
   var valid = true;
   var id       = document.getElementById('tm-id').value;
   var name     = document.getElementById('tm-name').value.trim();
+  var username = document.getElementById('tm-username').value.trim().toLowerCase();
   var email    = document.getElementById('tm-email').value.trim();
   var password = document.getElementById('tm-password').value.trim();
   var role     = document.getElementById('tm-role').value;
   var status   = document.getElementById('tm-status').value;
 
   if (!name)     { document.getElementById('tm-name-err').textContent = 'Name is required'; valid = false; }
-  if (!email)    { document.getElementById('tm-email-err').textContent = 'Email is required'; valid = false; }
+  if (!username) { document.getElementById('tm-username-err').textContent = 'Username is required'; valid = false; }
   if (!password) { document.getElementById('tm-password-err').textContent = 'Password is required'; valid = false; }
   if (!valid) return;
 
   var users = getUsers();
-  var emailExists = users.some(function(u) { return u.email.toLowerCase() === email.toLowerCase() && u.id !== id; });
-  if (emailExists) { document.getElementById('tm-email-err').textContent = 'Email already in use'; return; }
+  var usernameExists = users.some(function(u) { return u.username && u.username.toLowerCase() === username && u.id !== id; });
+  if (usernameExists) { document.getElementById('tm-username-err').textContent = 'Username already in use'; return; }
+
+  // If email provided, check uniqueness
+  if (email) {
+    var emailExists = users.some(function(u) { return u.email && u.email.toLowerCase() === email.toLowerCase() && u.id !== id; });
+    if (emailExists) { document.getElementById('tm-email-err').textContent = 'Email already in use'; return; }
+  } else {
+    email = username; // fallback so login-by-email still works if needed
+  }
 
   var idx;
   if (id) {
     idx = users.findIndex(function(u) { return u.id === id; });
     if (idx !== -1) {
-      Object.assign(users[idx], { name, email, password, role, status });
+      Object.assign(users[idx], { name, username, email, password, role, status });
       saveUsers(users);
       logActivity('update', 'Updated team member: ' + name);
       showToast('Team member updated', 'success');
     }
   } else {
-    users.push({ id: genId(), name, email, password, role, status, dateAdded: new Date().toISOString() });
+    users.push({ id: genId(), name, username, email, password, role, status, dateAdded: new Date().toISOString() });
     saveUsers(users);
-    logActivity('create', 'Added team member: ' + name);
-    showToast('Team member added', 'success');
+    logActivity('create', 'Added team member: ' + name + ' (username: ' + username + ')');
+    showToast('Team member added! Username: ' + username + ' | Password: ' + password, 'success');
   }
   closeTeamModal();
   loadTeam();

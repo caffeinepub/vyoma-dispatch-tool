@@ -145,10 +145,11 @@ function seedAdmin() {
 /* ── Auth ──────────────────────────────────────────────────── */
 function login(email, password) {
   const users = getUsers();
+  const input = (email || '').toLowerCase().trim();
   const user = users.find(u =>
-    u.email.toLowerCase() === email.toLowerCase() && u.password === password
+    ((u.email || "").toLowerCase() === input || (u.username && u.username.toLowerCase() === input)) && (u.password || "") === password
   );
-  if (!user) return { ok: false, error: 'Invalid email or password.' };
+  if (!user) return { ok: false, error: 'Invalid username/email or password.' };
   if (user.status === 'inactive') return { ok: false, error: 'Your account is inactive. Contact admin.' };
 
   const session = {
@@ -317,7 +318,7 @@ function showToast(message, type) {
   toast.className = 'toast toast-' + type;
   toast.innerHTML = '<span class="toast-icon">' + (icons[type] || 'ℹ️') + '</span><span>' + message + '</span>';
   container.appendChild(toast);
-  setTimeout(function() { toast.remove(); }, 3400);
+  setTimeout(function() { toast.remove(); }, 5000);
 }
 
 /* ── Confirm Dialog ────────────────────────────────────────── */

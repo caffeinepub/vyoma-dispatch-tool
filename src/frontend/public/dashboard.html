@@ -13,49 +13,8 @@
     .dash-main { padding: 24px; flex: 1; }
     .print-area { display: none; }
     @media print {
-      html, body { margin: 0; padding: 0; }
-      .print-area { display: block !important; }
-      body > *:not(.print-area) { display: none !important; }
-      .thermal-label {
-        width: 10cm;
-        height: 4.5cm;
-        padding: 4mm;
-        box-sizing: border-box;
-        font-family: Arial, sans-serif;
-        font-size: 9pt;
-        border: 1px solid #000;
-        display: flex;
-        flex-direction: column;
-        justify-content: space-between;
-        page-break-after: always;
-        overflow: hidden;
-      }
-      .thermal-label .label-header {
-        font-size: 7pt;
-        font-weight: bold;
-        color: #333;
-        border-bottom: 0.5px solid #aaa;
-        padding-bottom: 1mm;
-        margin-bottom: 1mm;
-      }
-      .thermal-label .label-name {
-        font-size: 11pt;
-        font-weight: bold;
-        line-height: 1.2;
-      }
-      .thermal-label .label-address {
-        font-size: 8pt;
-        line-height: 1.3;
-        flex: 1;
-        overflow: hidden;
-      }
-      .thermal-label .label-contact {
-        font-size: 8pt;
-        color: #333;
-        border-top: 0.5px solid #aaa;
-        padding-top: 1mm;
-        margin-top: 1mm;
-      }
+      .print-area { display: block; }
+      body > *:not(.print-area) { display: none; }
     }
     .product-row { display:flex; align-items:center; gap:8px; }
     .product-row input[type="text"] { flex:1; min-width:0; }
@@ -391,7 +350,19 @@
   <div id="dispatcher-view" class="hidden">
     <div class="page-header">
       <h2>My Dispatch Entries</h2>
-      <button type="button" class="btn btn-accent" onclick="openEntryModal()" data-ocid="dash.add.open_modal_button" style="font-size:0.95rem;padding:10px 20px">+ Add New Entry</button>
+      <div style="display:flex;gap:10px;align-items:center">
+        <button type="button" class="btn btn-ghost" onclick="toggleBarcodeScanner()" data-ocid="dash.barcode_scanner.toggle_button" title="Open Barcode Scanner" style="font-size:0.95rem;padding:10px 16px">📷 Scan Barcode</button>
+        <button type="button" class="btn btn-accent" onclick="openEntryModal()" data-ocid="dash.add.open_modal_button" style="font-size:0.95rem;padding:10px 20px">+ Add New Entry</button>
+      </div>
+    </div>
+    <!-- Barcode Scanner Bar -->
+    <div id="barcode-scanner-bar" style="display:none;background:var(--bg-card);border:2px solid var(--primary);border-radius:10px;padding:14px 18px;margin-bottom:16px;display:none;align-items:center;gap:12px">
+      <span style="font-size:1.3rem">🔍</span>
+      <div style="flex:1">
+        <label style="font-weight:600;font-size:0.85rem;color:var(--primary);display:block;margin-bottom:4px">Barcode Scanner Active — Scan a task barcode to identify it</label>
+        <input type="text" id="barcode-scan-input" class="form-control" placeholder="Scan barcode here (or type task ID and press Enter)..." autocomplete="off" style="max-width:480px" data-ocid="dash.barcode_scan.input" />
+      </div>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="toggleBarcodeScanner()">✕ Close</button>
     </div>
     <div class="stat-grid mb-20" id="dispatcher-stats"></div>
 
@@ -895,6 +866,7 @@ function setupAssignerView() {
   loadAssignerStats();
   filterAssignerTasks();
   setTimeout(function() { showOverduePopup(); handleQuickTaskLink(); }, 400);
+  initBarcodeScanner();
 }
 
 function loadAssignerStats() {
@@ -1006,6 +978,7 @@ function setupDispatcherView() {
   filterAssignedTasks();
   filterEscalatedTasks(); // pre-load badge count
   setTimeout(function() { showOverduePopup(); handleQuickTaskLink(); }, 400);
+  initBarcodeScanner();
 }
 
 function loadDispatcherStats() {
@@ -1236,7 +1209,8 @@ function renderTable(dispatches, tbodyId, emptyId, wrapId, isAssigned) {
       '<td class="actions"><div class="table-actions">' +
         (!isCompleted ? '<button type="button" class="btn btn-ghost btn-sm" onclick="editEntry(\''+d.id+'\')" data-ocid="dash.entries.edit_button.'+(i+1)+'">✏️</button>' : '') +
         notifyBtn +
-        '<button type="button" class="btn btn-ghost btn-sm" onclick="printEntry(\''+d.id+'\')" data-ocid="dash.entries.print_button.'+(i+1)+'" style="background:#e8f5e9;color:#2e7d32">🏷️ Label</button>' +
+        '<button type="button" class="btn btn-ghost btn-sm" onclick="printEntry(\''+d.id+'\')" data-ocid="dash.entries.print_button.'+(i+1)+'">🖨</button>' +
+        '<button type="button" class="btn btn-ghost btn-sm" onclick="printLabel(\''+d.id+'\')" data-ocid="dash.entries.label_button.'+(i+1)+'" title="Print Shipping Label">🏷️</button>' +
         (!isCompleted ? '<button type="button" class="btn btn-success btn-sm" onclick="completeEntry(\''+d.id+'\')" '+completeDisabled+' data-ocid="dash.entries.complete_button.'+(i+1)+'" title="'+escHtml(completeTitle)+'" style="opacity:'+(canComplete?'1':'0.45')+'">✅ Complete</button>' : '') +
         (!isCompleted ? '<button type="button" class="btn btn-danger btn-sm" onclick="deleteEntry(\''+d.id+'\')" data-ocid="dash.entries.delete_button.'+(i+1)+'">🗑</button>' : '') +
       '</div></td></tr>';
@@ -1262,6 +1236,34 @@ function refreshCurrentView() {
 function openEntryModal(prefillId) {
   editingEntryId = prefillId || null;
   clearEntryForm();
+
+  // For assigners: always repopulate dispatcher dropdown fresh so new dispatchers show up
+  if (SESSION && SESSION.role === 'assigner') {
+    var dispGrp = document.getElementById('assign-dispatcher-group');
+    if (dispGrp) dispGrp.style.display = 'block';
+    var dSelEl = document.getElementById('e-assign-dispatcher');
+    if (dSelEl) {
+      // Clear all options except the first placeholder
+      while (dSelEl.options.length > 1) dSelEl.remove(1);
+      // Repopulate with current dispatcher list
+      var activeDispatchers = getUsers().filter(function(u) { return u.role === 'dispatcher' && u.status === 'active'; });
+      if (activeDispatchers.length === 0) {
+        var noOpt = document.createElement('option');
+        noOpt.value = '';
+        noOpt.disabled = true;
+        noOpt.textContent = '— No dispatchers found. Ask admin to add one. —';
+        dSelEl.appendChild(noOpt);
+      } else {
+        activeDispatchers.forEach(function(u) {
+          var o = document.createElement('option');
+          o.value = u.id;
+          o.textContent = u.name;
+          dSelEl.appendChild(o);
+        });
+      }
+      dSelEl.value = '';
+    }
+  }
 
   var entry;
   if (prefillId) {
@@ -1309,6 +1311,15 @@ function clearEntryForm() {
   document.getElementById('e-nametype').value = '';
   document.getElementById('e-priority').value = '';
   document.getElementById('products-list').innerHTML = '';
+  // Show/hide dispatcher group and reset dispatcher select
+  var dispGroup = document.getElementById('assign-dispatcher-group');
+  var dSelClear = document.getElementById('e-assign-dispatcher');
+  if (SESSION && SESSION.role === 'assigner') {
+    if (dispGroup) dispGroup.style.display = '';
+    if (dSelClear) dSelClear.value = '';
+  } else {
+    if (dispGroup) dispGroup.style.display = 'none';
+  }
   // Assigner never sees tracking field; dispatcher sees it by default
   if (SESSION && SESSION.role === 'assigner') {
     document.getElementById('tracking-field-wrap').style.display = 'none';
@@ -1519,17 +1530,103 @@ function printEntry(id) {
   var entry = getDispatches().find(function(d) { return d.id === id; });
   if (!entry) return;
   var printArea = document.getElementById('print-area');
+  var productLines = (entry.products||[]).map(function(p){ return escHtml(p.name)+' × '+p.qty; }).join(', ') || '—';
   printArea.innerHTML =
-    '<div class="thermal-label">' +
-    '<div class="label-header">Vyoma Linguistic Labs Foundation &nbsp;|&nbsp; Order: ' + escHtml(entry.orderId) + '</div>' +
-    '<div class="label-name">' + escHtml(entry.customerName || '—') + '</div>' +
-    '<div class="label-address">' + escHtml(entry.address || '—') + '</div>' +
-    '<div class="label-contact">' +
-      '📞 ' + escHtml(entry.customerPhone || '—') +
-      ' &nbsp;|&nbsp; ✉ ' + escHtml(entry.customerEmail || '—') +
-    '</div>' +
+    '<div class="print-entry">' +
+    '<h2 style="color:#1a237e;border-bottom:2px solid #f9a825;padding-bottom:8px;margin-bottom:16px">Dispatch Entry — Vyoma Linguistic Labs Foundation</h2>' +
+    '<div class="print-row"><label>Sl No:</label><span>'+entry.slNo+'</span></div>' +
+    '<div class="print-row"><label>Customer Name:</label><span>'+escHtml(entry.customerName)+'</span></div>' +
+    (entry.nameType ? '<div class="print-row"><label>Name Type:</label><span>'+escHtml(entry.nameType)+'</span></div>' : '') +
+    '<div class="print-row"><label>Address:</label><span>'+escHtml(entry.address||'—')+'</span></div>' +
+    '<div class="print-row"><label>Order ID:</label><span>'+escHtml(entry.orderId)+'</span></div>' +
+    '<div class="print-row"><label>Customer Email:</label><span>'+escHtml(entry.customerEmail||'—')+'</span></div>' +
+    '<div class="print-row"><label>Customer Phone:</label><span>'+escHtml(entry.customerPhone||'—')+'</span></div>' +
+    '<div class="print-row"><label>Website:</label><span>'+escHtml(entry.website)+'</span></div>' +
+    '<div class="print-row"><label>Dispatch Type:</label><span>'+escHtml(entry.dispatchType)+'</span></div>' +
+    (entry.trackingNo ? '<div class="print-row"><label>Tracking Number:</label><span>'+escHtml(entry.trackingNo)+'</span></div>' : '') +
+    '<div class="print-row"><label>Priority:</label><span>'+escHtml(entry.priority||'Normal')+'</span></div>' +
+    '<div class="print-row"><label>Products Purchased:</label><span>'+productLines+'</span></div>' +
+    '<div class="print-row"><label>Status:</label><span>'+escHtml(entry.status)+'</span></div>' +
+    (entry.assignedToName ? '<div class="print-row"><label>Assigned To:</label><span>'+escHtml(entry.assignedToName)+'</span></div>' : '') +
+    '<div class="print-row"><label>Created By:</label><span>'+escHtml(entry.createdByName)+'</span></div>' +
+    '<div class="print-row"><label>Created At:</label><span>'+formatDateTime(entry.createdAt)+'</span></div>' +
+    '<div class="print-row"><label>Last Updated:</label><span>'+formatDateTime(entry.updatedAt)+'</span></div>' +
+    (entry.notes ? '<div class="print-row"><label>Notes:</label><span>'+escHtml(entry.notes)+'</span></div>' : '') +
     '</div>';
   window.print();
+}
+
+
+/* ══════════════════════════════════════════════════
+   PRINT SHIPPING LABEL (4.5cm × 10cm thermal)
+══════════════════════════════════════════════════ */
+function printLabel(id) {
+  var entry = getDispatches().find(function(d) { return d.id === id; });
+  if (!entry) return;
+  var labelWin = window.open('', '_blank', 'width=520,height=400');
+  if (!labelWin) { alert('Please allow popups for this page to print labels.'); return; }
+  var name    = escHtml(entry.customerName || '—');
+  var address = escHtml(entry.address || '—');
+  var phone   = escHtml(entry.customerPhone || '—');
+  var email   = escHtml(entry.customerEmail || '—');
+  var orderId = escHtml(entry.orderId || '—');
+  var barcodeVal = entry.id; // unique task ID used as barcode
+  labelWin.document.write(
+    '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Shipping Label</title>' +
+    '<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/barcodes/JsBarcode.code128.min.js"><\/script>' +
+    '<style>' +
+    '  @page { size: 100mm 45mm; margin: 0; }' +
+    '  * { box-sizing: border-box; margin: 0; padding: 0; }' +
+    '  body { width: 100mm; height: 45mm; font-family: Arial, sans-serif; font-size: 9pt; color: #000; background: #fff; }' +
+    '  .label { width: 100mm; height: 45mm; padding: 2mm 3mm 1mm 3mm; display: flex; flex-direction: row; border: 1px solid #000; gap: 2mm; }' +
+    '  .label-left { flex: 1; display: flex; flex-direction: column; justify-content: space-between; }' +
+    '  .label-right { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 22mm; border-left: 1px solid #ccc; padding-left: 2mm; }' +
+    '  .label-header { border-bottom: 1px solid #000; padding-bottom: 1mm; margin-bottom: 1mm; }' +
+    '  .label-header .org { font-size: 7pt; font-weight: bold; color: #1a237e; display:block; }' +
+    '  .label-header .order { font-size: 6.5pt; color: #555; }' +
+    '  .label-body { flex: 1; display: flex; flex-direction: column; gap: 0.8mm; }' +
+    '  .lrow { display: flex; gap: 1.5mm; align-items: flex-start; line-height: 1.3; }' +
+    '  .lrow .lkey { font-size: 6.5pt; font-weight: bold; min-width: 13mm; color: #333; white-space: nowrap; }' +
+    '  .lrow .lval { font-size: 8pt; font-weight: normal; word-break: break-word; }' +
+    '  .lrow.name-row .lval { font-size: 9pt; font-weight: bold; }' +
+    '  .barcode-wrap { display: flex; flex-direction: column; align-items: center; gap: 0.5mm; }' +
+    '  .barcode-wrap svg { max-width: 22mm; }' +
+    '  .barcode-id { font-size: 5pt; color: #666; word-break: break-all; text-align: center; max-width: 22mm; }' +
+    '  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }' +
+    '</style>' +
+    '</head><body>' +
+    '<div class="label">' +
+    '  <div class="label-left">' +
+    '    <div class="label-header">' +
+    '      <span class="org">Vyoma Linguistic Labs Foundation</span>' +
+    '      <span class="order">Order: ' + orderId + '</span>' +
+    '    </div>' +
+    '    <div class="label-body">' +
+    '      <div class="lrow name-row"><span class="lkey">Name:</span><span class="lval">' + name + '</span></div>' +
+    '      <div class="lrow"><span class="lkey">Address:</span><span class="lval">' + address + '</span></div>' +
+    '      <div class="lrow"><span class="lkey">Mobile:</span><span class="lval">' + phone + '</span></div>' +
+    '      <div class="lrow"><span class="lkey">Email:</span><span class="lval">' + email + '</span></div>' +
+    '    </div>' +
+    '  </div>' +
+    '  <div class="label-right">' +
+    '    <div class="barcode-wrap">' +
+    '      <svg id="barcode"></svg>' +
+    '      <div class="barcode-id">' + barcodeVal.slice(-8) + '</div>' +
+    '    </div>' +
+    '  </div>' +
+    '</div>' +
+    '<script>' +
+    'window.onload = function() {' +
+    '  try {' +
+    '    JsBarcode("#barcode", "' + barcodeVal + '", { format:"CODE128", width:1, height:28, displayValue:false, margin:0 });' +
+    '  } catch(e) {}' +
+    '  window.print();' +
+    '  window.onafterprint = function(){ window.close(); };' +
+    '};' +
+    '<\/script>' +
+    '</body></html>'
+  );
+  labelWin.document.close();
 }
 
 /* ══════════════════════════════════════════════════
@@ -1883,6 +1980,87 @@ function renderCrmDashboard() {
       }).join('');
     }
   }
+}
+
+
+/* ══════════════════════════════════════════════════
+   BARCODE SCANNER
+══════════════════════════════════════════════════ */
+function toggleBarcodeScanner() {
+  var bar = document.getElementById('barcode-scanner-bar');
+  if (!bar) return;
+  var isVisible = bar.style.display === 'flex';
+  bar.style.display = isVisible ? 'none' : 'flex';
+  if (!isVisible) {
+    var inp = document.getElementById('barcode-scan-input');
+    if (inp) { inp.value = ''; inp.focus(); }
+  }
+}
+
+function initBarcodeScanner() {
+  var inp = document.getElementById('barcode-scan-input');
+  if (!inp) return;
+  inp.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+      var val = inp.value.trim();
+      if (!val) return;
+      var dispatches = getDispatches();
+      // Match by task id (full or last 8 chars)
+      var task = dispatches.find(function(d) { return d.id === val || d.id.slice(-8) === val; });
+      if (!task) {
+        showToast('No task found for scanned barcode.', 'warn');
+        inp.value = '';
+        return;
+      }
+      inp.value = '';
+      showBarcodeScanResult(task);
+    }
+  });
+}
+
+function showBarcodeScanResult(task) {
+  var existing = document.getElementById('barcode-result-overlay');
+  if (existing) existing.remove();
+
+  var pColor = PRIORITY_COLORS[task.priority] || '#555';
+  var canComplete = task.status !== 'Completed';
+  var noTracking = NO_TRACKING_TYPES.includes(task.dispatchType);
+  var hasTracking = !noTracking ? !!task.trackingNo : true;
+
+  var overlay = document.createElement('div');
+  overlay.id = 'barcode-result-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)';
+  overlay.innerHTML =
+    '<div style="background:var(--bg-card);border-radius:14px;padding:28px 32px;max-width:420px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,0.3);position:relative">' +
+    '  <button onclick="document.getElementById("barcode-result-overlay").remove()" style="position:absolute;top:12px;right:14px;background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--text-light)">✕</button>' +
+    '  <div style="font-size:0.75rem;font-weight:700;color:var(--primary);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">📦 Task Identified</div>' +
+    '  <div style="font-size:1.3rem;font-weight:700;margin-bottom:4px">' + escHtml(task.customerName) + '</div>' +
+    '  <div style="font-size:0.85rem;color:var(--text-light);margin-bottom:12px">Order: <strong>' + escHtml(task.orderId) + '</strong> &nbsp;|&nbsp; ' + escHtml(task.dispatchType) + '</div>' +
+    '  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">' +
+    '    <span class="badge ' + statusBadgeClass(task.status) + '">' + escHtml(task.status) + '</span>' +
+    '    <span class="badge" style="background:' + pColor + ';color:#fff;font-size:0.7rem;padding:2px 8px;border-radius:20px">' + escHtml(task.priority) + '</span>' +
+    (task.trackingNo ? '<span style="font-size:0.8rem;background:var(--bg-main);padding:3px 8px;border-radius:6px;font-family:monospace">🚚 ' + escHtml(task.trackingNo) + '</span>' : '') +
+    '  </div>' +
+    (task.address ? '<div style="font-size:0.82rem;color:var(--text-light);margin-bottom:14px">📍 ' + escHtml(task.address) + '</div>' : '') +
+    (canComplete ?
+      (hasTracking ?
+        '  <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="barcodeCompleteTask("' + task.id + '")">✅ Mark as Completed</button>' :
+        '  <div style="font-size:0.85rem;color:#e65100;margin-bottom:10px">⚠️ Add a tracking number before completing this task.</div>' +
+        '  <button class="btn btn-accent" style="width:100%;justify-content:center" onclick="document.getElementById("barcode-result-overlay").remove();openTrackingModal("' + task.id + '")">Add Tracking Number</button>'
+      ) :
+      '  <div style="font-size:0.9rem;color:var(--success);font-weight:600;text-align:center;padding:10px 0">✅ This task is already Completed</div>'
+    ) +
+    '</div>';
+  document.body.appendChild(overlay);
+}
+
+function barcodeCompleteTask(id) {
+  confirmAction('Mark this task as <strong>Completed</strong>?', function() {
+    updateDispatch(id, { status: 'Completed' });
+    document.getElementById('barcode-result-overlay').remove();
+    showToast('Task marked as Completed!', 'success');
+    loadDispatcherView();
+  }, 'Complete Task');
 }
 
 function showDashComingSoon(module) {

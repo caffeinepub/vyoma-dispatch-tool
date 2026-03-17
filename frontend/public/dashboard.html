@@ -1223,6 +1223,34 @@ function openEntryModal(prefillId) {
   editingEntryId = prefillId || null;
   clearEntryForm();
 
+  // For assigners: always repopulate dispatcher dropdown fresh so new dispatchers show up
+  if (SESSION && SESSION.role === 'assigner') {
+    var dispGrp = document.getElementById('assign-dispatcher-group');
+    if (dispGrp) dispGrp.style.display = 'block';
+    var dSelEl = document.getElementById('e-assign-dispatcher');
+    if (dSelEl) {
+      // Clear all options except the first placeholder
+      while (dSelEl.options.length > 1) dSelEl.remove(1);
+      // Repopulate with current dispatcher list
+      var activeDispatchers = getUsers().filter(function(u) { return u.role === 'dispatcher' && u.status === 'active'; });
+      if (activeDispatchers.length === 0) {
+        var noOpt = document.createElement('option');
+        noOpt.value = '';
+        noOpt.disabled = true;
+        noOpt.textContent = '— No dispatchers found. Ask admin to add one. —';
+        dSelEl.appendChild(noOpt);
+      } else {
+        activeDispatchers.forEach(function(u) {
+          var o = document.createElement('option');
+          o.value = u.id;
+          o.textContent = u.name;
+          dSelEl.appendChild(o);
+        });
+      }
+      dSelEl.value = '';
+    }
+  }
+
   var entry;
   if (prefillId) {
     entry = getDispatches().find(function(d) { return d.id === prefillId; });
@@ -1269,6 +1297,15 @@ function clearEntryForm() {
   document.getElementById('e-nametype').value = '';
   document.getElementById('e-priority').value = '';
   document.getElementById('products-list').innerHTML = '';
+  // Show/hide dispatcher group and reset dispatcher select
+  var dispGroup = document.getElementById('assign-dispatcher-group');
+  var dSelClear = document.getElementById('e-assign-dispatcher');
+  if (SESSION && SESSION.role === 'assigner') {
+    if (dispGroup) dispGroup.style.display = '';
+    if (dSelClear) dSelClear.value = '';
+  } else {
+    if (dispGroup) dispGroup.style.display = 'none';
+  }
   // Assigner never sees tracking field; dispatcher sees it by default
   if (SESSION && SESSION.role === 'assigner') {
     document.getElementById('tracking-field-wrap').style.display = 'none';
