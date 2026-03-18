@@ -351,6 +351,7 @@
       <h2>My Dispatch Entries</h2>
       <div style="display:flex;gap:10px;align-items:center">
         <button type="button" class="btn btn-ghost" onclick="toggleBarcodeScanner()" data-ocid="dash.barcode_scanner.toggle_button" title="Open Barcode Scanner" style="font-size:0.95rem;padding:10px 16px">📷 Scan Barcode</button>
+        <button type="button" class="btn btn-outline" onclick="openImageOCRModal()" data-ocid="dash.dispatcher.ocr.open_modal_button" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border-color:#6366f1">📷 Upload via Image</button>
         <button type="button" class="btn btn-accent" onclick="openEntryModal()" data-ocid="dash.add.open_modal_button" style="font-size:0.95rem;padding:10px 20px">+ Add New Entry</button>
       </div>
     </div>
@@ -855,21 +856,37 @@ function richPriorityBadge(priority) {
   SESSION = checkSession('user');
   if (!SESSION) return;
 
-  document.getElementById('user-name').textContent = SESSION.name;
-  document.getElementById('user-avatar').textContent = SESSION.name.charAt(0).toUpperCase();
-  document.getElementById('user-role-label').textContent = SESSION.role.charAt(0).toUpperCase() + SESSION.role.slice(1);
-  updateDarkToggle();
+  // ── Update user display FIRST (before anything that could throw) ──
+  var displayName = SESSION.name || SESSION.email || 'User';
+  var displayRole = (SESSION.role || 'user');
+  var displayRoleLabel = displayRole.charAt(0).toUpperCase() + displayRole.slice(1);
+  var displayInitial = displayName.charAt(0).toUpperCase();
 
+  var sidebarName = document.getElementById('sidebar-user-name');
+  var sidebarRole = document.getElementById('sidebar-user-role');
+  var sidebarAvatar = document.getElementById('sidebar-user-avatar');
+  var topbarName = document.getElementById('user-name');
+  var topbarAvatar = document.getElementById('user-avatar');
+  var topbarRole = document.getElementById('user-role-label');
+
+  if (sidebarName) sidebarName.textContent = displayName;
+  if (sidebarRole) sidebarRole.textContent = displayRoleLabel;
+  if (sidebarAvatar) sidebarAvatar.textContent = displayInitial;
+  if (topbarName) topbarName.textContent = displayName;
+  if (topbarAvatar) topbarAvatar.textContent = displayInitial;
+  if (topbarRole) topbarRole.textContent = displayRoleLabel;
+
+  updateDarkToggle();
   populateFormDropdowns();
 
-  // Setup dispatch views in background
+  // Setup dispatch views
   if (SESSION.role === 'assigner') {
     setupAssignerView();
   } else {
     setupDispatcherView();
   }
 
-  // Show CRM home dashboard by default
+  // Hide all views, show home dashboard
   var assView = document.getElementById('assigner-view');
   var disView = document.getElementById('dispatcher-view');
   var homeView = document.getElementById('crm-home-view');
@@ -878,14 +895,7 @@ function richPriorityBadge(priority) {
   if (homeView) homeView.classList.remove('hidden');
   var titleEl = document.getElementById('dash-page-title');
   if (titleEl) titleEl.textContent = 'Dashboard';
-  // Sidebar user info
-  var sidebarName = document.getElementById('sidebar-user-name');
-  var sidebarRole = document.getElementById('sidebar-user-role');
-  var sidebarAvatar = document.getElementById('sidebar-user-avatar');
-  if (sidebarName) sidebarName.textContent = SESSION.name;
-  if (sidebarRole) sidebarRole.textContent = SESSION.role.charAt(0).toUpperCase() + SESSION.role.slice(1);
-  if (sidebarAvatar) sidebarAvatar.textContent = SESSION.name.charAt(0).toUpperCase();
-  // Render CRM dashboard after short delay for DOM readiness
+
   setTimeout(renderCrmDashboard, 100);
 })();
 
@@ -1047,7 +1057,7 @@ function setupDispatcherView() {
   document.getElementById('dispatcher-view').classList.remove('hidden');
   document.getElementById('assigner-view').classList.add('hidden');
   document.getElementById('header-sub').textContent = 'Dispatch Tool — Data Entry';
-  document.getElementById('assign-dispatcher-group').style.display = 'none';
+  var adg = document.getElementById('assign-dispatcher-group'); if (adg) adg.style.display = 'none';
 
   var statusSel = document.getElementById('filter-status');
   STATUSES.forEach(function(s) { var o=document.createElement('option'); o.value=s; o.textContent=s; statusSel.appendChild(o); });
@@ -1148,6 +1158,9 @@ function filterAssignedTasks() {
   } else {
     banner.classList.add('hidden');
   }
+  // Update the tab badge with fresh count
+  var asnBadge = document.getElementById('assigned-count-badge');
+  if (asnBadge) asnBadge.textContent = tasks.length;
 
   renderTable(tasks, 'assigned-tbody', 'assigned-empty', 'assigned-table-wrap', true);
 }
@@ -1881,10 +1894,12 @@ function showDashNav(section) {
       if (assView) assView.classList.remove('hidden');
       if (disView) disView.classList.add('hidden');
       if (titleEl) titleEl.textContent = 'Task Assignment';
+      loadAssignerStats(); filterAssignerTasks();
     } else {
       if (disView) disView.classList.remove('hidden');
       if (assView) assView.classList.add('hidden');
       if (titleEl) titleEl.textContent = 'My Dispatch Entries';
+      loadDispatcherStats(); filterEntries(); filterAssignedTasks();
     }
   }
 
@@ -2141,7 +2156,7 @@ function showBarcodeScanResult(task) {
       (hasTracking ?
         '  <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="barcodeCompleteTask("' + task.id + '")">✅ Mark as Completed</button>' :
         '  <div style="font-size:0.85rem;color:#e65100;margin-bottom:10px">⚠️ Add a tracking number before completing this task.</div>' +
-        '  <button class="btn btn-accent" style="width:100%;justify-content:center" onclick="document.getElementById("barcode-result-overlay").remove();openTrackingModal("' + task.id + '")">Add Tracking Number</button>'
+        '  <button class="btn btn-accent" style="width:100%;justify-content:center" onclick="document.getElementById(\'barcode-result-overlay\').remove();openTrackingModal(\'" + task.id + "\')">📝 Add Tracking Number</button>'
       ) :
       '  <div style="font-size:0.9rem;color:var(--success);font-weight:600;text-align:center;padding:10px 0">✅ This task is already Completed</div>'
     ) +
@@ -2154,7 +2169,7 @@ function barcodeCompleteTask(id) {
     updateDispatch(id, { status: 'Completed' });
     document.getElementById('barcode-result-overlay').remove();
     showToast('Task marked as Completed!', 'success');
-    loadDispatcherView();
+    loadDispatcherStats(); filterEntries(); filterAssignedTasks();
   }, 'Complete Task');
 }
 
@@ -2301,10 +2316,10 @@ function createOrderFromContactId(cid) {
   setTimeout(function() {
     openEntryModal && openEntryModal();
     setTimeout(function() {
-      var nm = document.getElementById('field-customer-name');
-      var em = document.getElementById('field-customer-email');
-      var ph = document.getElementById('field-customer-phone');
-      var ad = document.getElementById('field-address');
+      var nm = document.getElementById('e-name');
+      var em = document.getElementById('e-email');
+      var ph = document.getElementById('e-phone');
+      var ad = document.getElementById('e-address');
       if (nm) nm.value = c.name || '';
       if (em) em.value = c.email || '';
       if (ph) ph.value = c.phone || '';

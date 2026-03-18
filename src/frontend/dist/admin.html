@@ -61,12 +61,11 @@
           <span class="nav-label">All Dispatches</span>
           <span class="nav-badge" id="badge-dispatches">0</span>
         </div>
-        <div class="nav-item nav-item-soon" onclick="showComingSoon('Contacts')" data-ocid="admin.nav.contacts">
+        <div class="nav-item" data-tab="contacts" onclick="switchTab('contacts')" data-ocid="admin.nav.contacts">
           <span class="nav-icon">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           </span>
           <span class="nav-label">Contacts</span>
-          <span class="nav-soon-badge">Soon</span>
         </div>
       </div>
       <div class="crm-nav-section">
@@ -382,6 +381,30 @@
         </div>
       </section>
 
+      <!-- ══════════════ TAB: CONTACTS ══════════════ -->
+      <section id="tab-contacts" class="fade-in hidden">
+        <div style="padding:1.5rem">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.2rem;flex-wrap:wrap;gap:0.75rem">
+            <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap">
+              <input type="text" id="admin-contacts-search" class="form-control" style="width:260px;font-size:0.88rem" placeholder="Search by name, email, phone..." oninput="renderAdminContacts()" />
+              <span id="admin-contacts-count" style="background:var(--accent);color:#fff;padding:0.25rem 0.7rem;border-radius:20px;font-size:0.82rem;font-weight:600"></span>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>#</th><th>Name</th><th>Email</th><th>Phone</th><th>Address</th><th>Orders</th><th>Last Updated</th><th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="admin-contacts-tbody">
+                <tr><td colspan="8" style="text-align:center;padding:2.5rem;color:var(--text-muted)">No contacts yet. Contacts are auto-saved when orders are created.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
       <!-- ══════════════ TAB: COMING SOON ══════════════ -->
       <section id="tab-coming-soon" class="fade-in hidden">
         <div class="crm-coming-soon">
@@ -568,12 +591,12 @@ function closeSidebar() { document.getElementById('sidebar').classList.remove('o
 const tabTitles = {
   dashboard: 'Analytics Dashboard', team: 'Team Members',
   dispatches: 'All Dispatches', analytics: 'User Analytics',
-  reports: 'Reports & Export', settings: 'Settings'
+  reports: 'Reports & Export', settings: 'Settings', contacts: 'Contacts'
 };
 
 function switchTab(tabName) {
-  ['dashboard','team','dispatches','analytics','reports','settings'].forEach(function(t) {
-    document.getElementById('tab-' + t).classList.toggle('hidden', t !== tabName);
+  ['dashboard','team','dispatches','analytics','reports','settings','contacts'].forEach(function(t) {
+    var el = document.getElementById('tab-' + t); if (el) el.classList.toggle('hidden', t !== tabName);
     var navEl = document.querySelector('[data-tab="' + t + '"]');
     if (navEl) navEl.classList.toggle('active', t === tabName);
   });
@@ -585,6 +608,7 @@ function switchTab(tabName) {
   if (tabName === 'analytics')  loadUserAnalytics();
   if (tabName === 'reports')    loadReports();
   if (tabName === 'settings')   loadSettings();
+  if (tabName === 'contacts')   renderAdminContacts();
 }
 
 /* ── Badges ───────────────────────────────────────────────── */
@@ -1329,6 +1353,98 @@ function toggleSidebarCollapse() {
   } else {
     btn.style.transform = '';
   }
+}
+
+/* ── Admin Contacts ──────────────────────────────────────── */
+function renderAdminContacts() {
+  var contacts = getContacts() || [];
+  var q = ((document.getElementById('admin-contacts-search') || {}).value || '').trim().toLowerCase();
+  var filtered = q ? contacts.filter(function(c) {
+    return (c.name||'').toLowerCase().includes(q) || (c.email||'').toLowerCase().includes(q) || (c.phone||'').includes(q);
+  }) : contacts;
+  var badge = document.getElementById('admin-contacts-count');
+  if (badge) badge.textContent = filtered.length + ' Contact' + (filtered.length !== 1 ? 's' : '');
+  var tbody = document.getElementById('admin-contacts-tbody');
+  if (!tbody) return;
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:2.5rem;color:var(--text-muted)">No contacts found.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = filtered.map(function(c, i) {
+    var orders = c.orders || [];
+    var lastDate = c.updatedAt ? new Date(c.updatedAt).toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'numeric'}) : '-';
+    return '<tr style="border-bottom:1px solid var(--border)">' +
+      '<td style="padding:0.7rem 1rem;color:var(--text-muted)">' + (i+1) + '</td>' +
+      '<td style="padding:0.7rem 1rem;font-weight:600">' + escHtml(c.name||'-') + '</td>' +
+      '<td style="padding:0.7rem 1rem">' + escHtml(c.email||'-') + '</td>' +
+      '<td style="padding:0.7rem 1rem">' + escHtml(c.phone||'-') + '</td>' +
+      '<td style="padding:0.7rem 1rem;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escHtml(c.address||'-') + '</td>' +
+      '<td style="padding:0.7rem 1rem;text-align:center"><span style="background:var(--accent);color:#fff;padding:0.2rem 0.6rem;border-radius:12px;font-size:0.8rem;font-weight:600">' + orders.length + '</span></td>' +
+      '<td style="padding:0.7rem 1rem;color:var(--text-muted);font-size:0.83rem">' + lastDate + '</td>' +
+      '<td style="padding:0.7rem 1rem;text-align:center">' +
+        '<button type="button" onclick="adminViewContact(\'' + c.id + '\')" style="background:var(--accent);color:#fff;border:none;border-radius:6px;padding:0.3rem 0.65rem;font-size:0.8rem;cursor:pointer;margin-right:4px" title="View">👁</button>' +
+        '<button type="button" onclick="adminEditContact(\'' + c.id + '\')" style="background:#f59e0b;color:#fff;border:none;border-radius:6px;padding:0.3rem 0.65rem;font-size:0.8rem;cursor:pointer;margin-right:4px" title="Edit">✏️</button>' +
+        '<button type="button" onclick="adminDeleteContact(\'' + c.id + '\')" style="background:#ef4444;color:#fff;border:none;border-radius:6px;padding:0.3rem 0.65rem;font-size:0.8rem;cursor:pointer" title="Delete">🗑</button>' +
+      '</td></tr>';
+  }).join('');
+}
+
+function adminViewContact(cid) {
+  var contacts = getContacts() || [];
+  var c = contacts.find(function(x) { return x.id === cid; });
+  if (!c) return;
+  var orders = c.orders || [];
+  var dispatches = getDispatches() || [];
+  var ordersHtml = orders.length ? '<table style="width:100%;border-collapse:collapse;font-size:0.85rem"><thead><tr style="background:var(--surface2)"><th style="padding:0.4rem 0.6rem;text-align:left">Order ID</th><th style="padding:0.4rem 0.6rem;text-align:left">Dispatch Type</th><th style="padding:0.4rem 0.6rem;text-align:left">Status</th><th style="padding:0.4rem 0.6rem;text-align:left">Date</th></tr></thead><tbody>' +
+    orders.map(function(o) {
+      var d = dispatches.find(function(dd) { return dd.id === o.id; });
+      return '<tr style="border-bottom:1px solid var(--border)"><td style="padding:0.4rem 0.6rem">' + escHtml(o.orderId||'-') + '</td><td style="padding:0.4rem 0.6rem">' + escHtml((d&&d.dispatchType)||'-') + '</td><td style="padding:0.4rem 0.6rem">' + escHtml((d&&d.status)||o.status||'-') + '</td><td style="padding:0.4rem 0.6rem">' + formatDate(o.createdAt) + '</td></tr>';
+    }).join('') + '</tbody></table>' : '<p style="color:var(--text-muted)">No orders yet.</p>';
+  var html = '<div style="font-size:0.9rem"><div class="report-stat-grid" style="margin-bottom:1rem">' +
+    '<div><label style="font-size:0.75rem;color:var(--text-muted);display:block">Name</label><strong>' + escHtml(c.name||'-') + '</strong></div>' +
+    '<div><label style="font-size:0.75rem;color:var(--text-muted);display:block">Email</label>' + escHtml(c.email||'-') + '</div>' +
+    '<div><label style="font-size:0.75rem;color:var(--text-muted);display:block">Phone</label>' + escHtml(c.phone||'-') + '</div>' +
+    '<div><label style="font-size:0.75rem;color:var(--text-muted);display:block">Address</label>' + escHtml(c.address||'-') + '</div>' +
+    '</div><h4 style="margin-bottom:0.5rem">Order History (' + orders.length + ')</h4>' + ordersHtml + '</div>';
+  var overlay = document.createElement('div');
+  overlay.className = 'modal-overlay open';
+  overlay.innerHTML = '<div class="modal"><div class="modal-header"><h3>Contact: ' + escHtml(c.name) + '</h3><button type="button" class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div><div class="modal-body">' + html + '</div></div>';
+  document.body.appendChild(overlay);
+}
+
+function adminEditContact(cid) {
+  var contacts = getContacts() || [];
+  var idx = contacts.findIndex(function(x) { return x.id === cid; });
+  if (idx === -1) return;
+  var c = contacts[idx];
+  var overlay = document.createElement('div');
+  overlay.className = 'modal-overlay open';
+  overlay.innerHTML = '<div class="modal"><div class="modal-header"><h3>Edit Contact</h3><button type="button" class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div><div class="modal-body"><form id="admin-edit-contact-form"><div class="form-group"><label>Name</label><input id="ace-name" class="form-control" value="' + escHtml(c.name||'') + '"/></div><div class="form-group"><label>Email</label><input id="ace-email" class="form-control" value="' + escHtml(c.email||'') + '"/></div><div class="form-group"><label>Phone</label><input id="ace-phone" class="form-control" value="' + escHtml(c.phone||'') + '"/></div><div class="form-group"><label>Address</label><textarea id="ace-addr" class="form-control" rows="2">' + escHtml(c.address||'') + '</textarea></div></form></div><div class="modal-footer"><button type="button" class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Cancel</button><button type="button" class="btn btn-primary" onclick="adminSaveContact(\'' + cid + '\', this)">Save</button></div></div>';
+  document.body.appendChild(overlay);
+}
+
+function adminSaveContact(cid, btn) {
+  var contacts = getContacts() || [];
+  var idx = contacts.findIndex(function(x) { return x.id === cid; });
+  if (idx === -1) return;
+  contacts[idx].name    = document.getElementById('ace-name').value.trim();
+  contacts[idx].email   = document.getElementById('ace-email').value.trim();
+  contacts[idx].phone   = document.getElementById('ace-phone').value.trim();
+  contacts[idx].address = document.getElementById('ace-addr').value.trim();
+  contacts[idx].updatedAt = new Date().toISOString();
+  saveContacts(contacts);
+  btn.closest('.modal-overlay').remove();
+  renderAdminContacts();
+  showToast('Contact updated', 'success');
+}
+
+function adminDeleteContact(cid) {
+  confirmAction('Delete this contact? This cannot be undone.', function() {
+    var contacts = (getContacts() || []).filter(function(c) { return c.id !== cid; });
+    saveContacts(contacts);
+    renderAdminContacts();
+    showToast('Contact deleted', 'success');
+  });
 }
 
 /* ── Coming Soon Panel ───────────────────────────────────── */
